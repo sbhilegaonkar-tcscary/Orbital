@@ -66,7 +66,10 @@ function joinText(value: string | string[] | undefined): string {
 function splitText(value: string): string[] {
   if (value === '') return [];
   const lines = value.split('\n');
-  return lines.map((line, i) => (i < lines.length - 1 ? line + '\n' : line));
+  const out = lines.map((line, i) => (i < lines.length - 1 ? line + '\n' : line));
+  // Match Python's str.splitlines(keepends=True): no empty trailing element.
+  if (out[out.length - 1] === '') out.pop();
+  return out;
 }
 
 function outputFromRaw(raw: RawNbOutput): CellOutput {
