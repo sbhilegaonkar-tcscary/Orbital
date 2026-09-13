@@ -1,0 +1,258 @@
+/*
+ * Cell chrome per docs/DESIGN.md "Component rules". Tokens only — no color
+ * literals. Mode-specific motion (cockpit/bridge running sweep) is gated on
+ * [data-mode] and [data-motion] set by ThemeProvider on :root.
+ */
+
+.notebook-empty {
+  padding: 32px;
+  color: var(--text-muted);
+  font: 400 13px/1.5 var(--font-ui);
+}
+
+.notebook-error {
+  color: var(--danger);
+}
+
+.notebook {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px 28px 48px;
+  outline: none;
+}
+
+.cell {
+  display: grid;
+  grid-template-columns: 60px 1fr;
+  gap: 0;
+  position: relative;
+  outline: none;
+}
+
+.cell-gutter {
+  box-sizing: border-box;
+  text-align: right;
+  padding: 12px 12px 0 0;
+  color: var(--text-muted);
+  font: 500 11.5px/1.4 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+.cell-count {
+  display: block;
+}
+
+.cell-io-label {
+  display: block;
+  margin-top: 8px;
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+.cell-body {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.cell-editor {
+  font-variant-numeric: tabular-nums;
+}
+
+.cell-output {
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 40%, var(--surface));
+  padding: 12px 18px 14px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cell-output-stream {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.cell-output-stream + .cell-output-stream {
+  margin-top: 8px;
+}
+
+.cell-output-stream[data-name='stderr'] {
+  color: var(--danger);
+}
+
+.cell-output-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.cell-output-image {
+  display: block;
+  max-width: 100%;
+}
+
+.cell-output-svg svg {
+  max-width: 100%;
+}
+
+.cell-output-html table {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.cell-output-html th,
+.cell-output-html td {
+  padding: 4px 20px 4px 0;
+  text-align: right;
+}
+
+.cell-output-html th {
+  font-weight: 500;
+  color: var(--accent);
+  border-bottom: 1px solid var(--border);
+}
+
+.cell-output-html td:first-child,
+.cell-output-html th:first-child {
+  text-align: left;
+  color: var(--text-muted);
+  padding-right: 26px;
+}
+
+/* markdown cell */
+.cell-markdown-rendered {
+  padding: 20px 22px 18px;
+  cursor: text;
+  outline: none;
+}
+
+.cell-markdown-rendered h1 {
+  margin: 0 0 8px;
+  font: 600 22px/1.25 var(--font-display);
+  letter-spacing: -0.015em;
+}
+
+.cell-markdown-rendered h2 {
+  margin: 16px 0 6px;
+  font: 600 16px/1.3 var(--font-display);
+}
+
+.cell-markdown-rendered p {
+  margin: 0 0 10px;
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: color-mix(in srgb, var(--text) 88%, var(--text-muted));
+  max-width: 76ch;
+}
+
+.cell-markdown-rendered p:last-child {
+  margin-bottom: 0;
+}
+
+.cell-markdown-rendered code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  color: var(--accent-2);
+  background: color-mix(in srgb, var(--accent-2) 12%, transparent);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.cell-markdown-rendered a {
+  color: var(--accent);
+}
+
+/* error state: gutter count and left edge bar, tinted traceback only */
+.cell[data-state='error'] .cell-count {
+  color: var(--danger);
+}
+
+.cell[data-state='error'] .cell-body {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+}
+
+.cell[data-state='error'] .cell-body::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--danger);
+}
+
+.cell-traceback {
+  margin: 0;
+  padding: 12px 18px 14px;
+  border-top: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
+  background: color-mix(in srgb, var(--danger) 6%, var(--surface));
+  font: 400 12.5px/1.6 var(--font-mono);
+  color: var(--danger);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+
+.cell-traceback .hl {
+  display: inline-block;
+  width: calc(100% + 36px);
+  margin: 0 -18px;
+  padding: 0 18px;
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--text);
+}
+
+/* running state: [*] in the gutter plus a top-edge indicator */
+.cell[data-state='running'] .cell-count {
+  color: var(--warning);
+}
+
+.cell[data-state='queued'] .cell-count {
+  color: var(--warning);
+  opacity: 0.7;
+}
+
+.cell[data-state='running'] .cell-body {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.cell[data-state='running'] .cell-body::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent-2), var(--accent));
+}
+
+/* cockpit and bridge: sweeping light instead of the static rule above */
+:root:not([data-motion='reduced']) [data-mode='cockpit'] .cell[data-state='running'] .cell-body::before,
+:root:not([data-motion='reduced']) [data-mode='bridge'] .cell[data-state='running'] .cell-body::before {
+  width: 30%;
+  background: linear-gradient(90deg, transparent, var(--warning), transparent);
+  animation: cell-running-sweep 1.8s linear infinite;
+}
+
+@keyframes cell-running-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(333%);
+  }
+}
+
+/* selected: glow on the body, accent bar on the gutter */
+.cell[data-selected] .cell-body {
+  box-shadow: var(--glow);
+}
+
+.cell[data-selected] .cell-gutter {
+  box-sizing: border-box;
+  border-left: 2px solid var(--accent);
+}

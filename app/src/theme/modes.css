@@ -1,0 +1,257 @@
+/* Per-mode layout deltas. Skins never change layout; modes do. */
+
+/* ---- cockpit: dense HUD ---------------------------------------------------- */
+[data-mode='cockpit'] {
+  --rail-w: 76px;
+  --inspector-w: 260px;
+  --topbar-h: 44px;
+  --statusbar-h: 24px;
+}
+
+[data-mode='cockpit'] body {
+  font-size: 12px;
+}
+
+[data-mode='cockpit'] .topbar,
+[data-mode='cockpit'] .rail,
+[data-mode='cockpit'] .inspector,
+[data-mode='cockpit'] .statusbar {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+[data-mode='cockpit'] .rail-item {
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 8px 2px;
+}
+
+[data-mode='cockpit'] .card,
+[data-mode='cockpit'] .notebook-toolbar button,
+[data-mode='cockpit'] .settings-view {
+  font-size: 12px;
+}
+
+[data-mode='cockpit'] {
+  --code-size: 12.5px;
+}
+
+[data-mode='cockpit'] pre,
+[data-mode='cockpit'] code {
+  font-size: 12.5px;
+}
+
+/* LED indicator, shared by topbar/statusbar/cell-tab chrome */
+[data-mode='cockpit'] .led {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+[data-mode='cockpit'] .led-ok {
+  background: var(--success);
+  box-shadow: 0 0 6px var(--success);
+}
+
+[data-mode='cockpit'] .led-warn {
+  background: var(--warning);
+  box-shadow: 0 0 6px var(--warning);
+}
+
+[data-mode='cockpit'] .led-err {
+  background: var(--danger);
+  box-shadow: 0 0 6px var(--danger);
+}
+
+/* Tab-style header, available to cell chrome (M3) */
+[data-mode='cockpit'] .tab-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  padding: 4px 18px 4px 10px;
+  font: 500 10.5px/1 var(--font-mono);
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border-radius: 0 0 6px 0;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+}
+
+/* ---- paper & night-ops: no ambient motion ----------------------------------- */
+[data-mode='paper'] *,
+[data-mode='night-ops'] * {
+  animation: none !important;
+}
+
+/* ---- bridge: translucent panels + ambient sky ------------------------------- */
+[data-mode='bridge'] {
+  --nebula-1: color-mix(in srgb, var(--accent-2) 55%, var(--bg));
+  --nebula-2: color-mix(in srgb, var(--accent) 55%, var(--bg));
+  --nebula-3: color-mix(in srgb, var(--danger) 55%, var(--bg));
+}
+
+[data-mode='bridge'] .topbar,
+[data-mode='bridge'] .rail,
+[data-mode='bridge'] .inspector,
+[data-mode='bridge'] .statusbar {
+  background: color-mix(in srgb, var(--surface) 74%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+[data-mode='bridge'] .card,
+[data-mode='bridge'] .skin-popover {
+  background: color-mix(in srgb, var(--surface) 74%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+[data-mode='bridge'] .topbar-logo {
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ---- sky: fixed layers behind the app shell --------------------------------- */
+.sky {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.sky-cloud {
+  position: absolute;
+  width: 70vw;
+  height: 70vw;
+  border-radius: 50%;
+  opacity: 0.85;
+  will-change: transform;
+}
+
+.sky-cloud-1 {
+  left: -20vw;
+  top: -30vw;
+  background: radial-gradient(closest-side, var(--nebula-1), transparent 68%);
+}
+
+.sky-cloud-2 {
+  right: -25vw;
+  top: 5vw;
+  background: radial-gradient(closest-side, var(--nebula-2), transparent 68%);
+}
+
+.sky-cloud-3 {
+  left: 20vw;
+  bottom: -45vw;
+  background: radial-gradient(closest-side, var(--nebula-3), transparent 68%);
+}
+
+.sky-stars {
+  position: absolute;
+  inset: -10%;
+  width: 1px;
+  height: 1px;
+  border-radius: 50%;
+  background: transparent;
+  will-change: transform;
+}
+
+.sky-stars-far {
+  opacity: 0.55;
+}
+
+.sky-stars-near {
+  opacity: 0.9;
+}
+
+.sky-streak {
+  position: absolute;
+  top: 18%;
+  left: 62%;
+  width: 140px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--text), transparent);
+  transform: rotate(-28deg) translateX(0);
+  opacity: 0;
+}
+
+:root:not([data-motion='reduced']) .sky-cloud-1 {
+  animation: sky-drift-1 120s ease-in-out infinite alternate;
+}
+
+:root:not([data-motion='reduced']) .sky-cloud-2 {
+  animation: sky-drift-2 150s ease-in-out infinite alternate;
+}
+
+:root:not([data-motion='reduced']) .sky-cloud-3 {
+  animation: sky-drift-3 135s ease-in-out infinite alternate;
+}
+
+:root:not([data-motion='reduced']) .sky-stars-far {
+  animation: sky-parallax 240s linear infinite;
+}
+
+:root:not([data-motion='reduced']) .sky-stars-near {
+  animation: sky-parallax 120s linear infinite;
+}
+
+:root:not([data-motion='reduced']) .sky-streak {
+  animation: sky-streak 16s linear infinite;
+  animation-delay: 4s;
+}
+
+:root[data-motion='reduced'] .sky-streak {
+  display: none;
+}
+
+@keyframes sky-drift-1 {
+  to {
+    transform: translate(9vw, 6vw) rotate(12deg);
+  }
+}
+
+@keyframes sky-drift-2 {
+  to {
+    transform: translate(-8vw, 9vw) rotate(-10deg);
+  }
+}
+
+@keyframes sky-drift-3 {
+  to {
+    transform: translate(-10vw, -7vw) rotate(8deg);
+  }
+}
+
+@keyframes sky-parallax {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-80px, 40px, 0);
+  }
+}
+
+@keyframes sky-streak {
+  0% {
+    opacity: 0;
+    transform: rotate(-28deg) translateX(0);
+  }
+  2% {
+    opacity: 0.9;
+  }
+  6% {
+    opacity: 0;
+    transform: rotate(-28deg) translateX(-420px);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(-28deg) translateX(-420px);
+  }
+}

@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cockpit / Starship Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* Mode: Cockpit — Variant B: Starship Console */
+    --bg: #0b1116;
+    --surface: #131b22;
+    --surface-2: #1a2530;
+    --border: #2a3742;
+    --text: #dbe6ec;
+    --text-muted: #7d8fa0;
+    --accent: #2dd4bf;
+    --accent-2: #ff8a3d;
+    --success: #34d399;
+    --warning: #fbbf24;
+    --danger: #f87171;
+    --font-ui: 'Titillium Web', 'Segoe UI', sans-serif;
+    --font-mono: 'IBM Plex Mono', 'Consolas', monospace;
+    --font-display: 'Titillium Web', 'Segoe UI', sans-serif;
+    --radius: 4px;
+    --glow: 0 0 10px rgba(45,212,191,0.45);
+    --bevel: inset 1px 1px 0 rgba(255,255,255,0.05), inset -1px -1px 0 rgba(0,0,0,0.45);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--bevel);
+  }
+
+  .tab-header {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 16px 4px 10px;
+    background: var(--surface-2);
+    clip-path: polygon(0 0, 100% 0, 92% 100%, 0% 100%);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+  }
+
+  .led {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    box-shadow: 0 0 0 2px var(--bg) inset;
+  }
+  .led-ok { background: var(--success); box-shadow: var(--glow); }
+  .led-error { background: var(--danger); }
+  .led-run { background: var(--accent-2); }
+
+  /* ---------- spec strip ---------- */
+  .spec-strip {
+    flex: 0 0 auto;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 6px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .strip-title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 12px;
+    color: var(--accent);
+  }
+  .strip-desc {
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+  .strip-meta {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex-wrap: wrap;
+    font-size: 9px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+  }
+  .swatch { display: inline-flex; align-items: center; gap: 3px; }
+  .swatch-color {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    border: 1px solid var(--border);
+    display: inline-block;
+    background: var(--sw);
+  }
+  .swatch-glow .swatch-color { background: var(--surface-2); box-shadow: var(--glow); }
+  .fonts-meta { margin-left: auto; display: flex; gap: 12px; }
+
+  /* ---------- app shell ---------- */
+  .app {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 72px 1fr 240px;
+    grid-template-rows: 50px 1fr 28px;
+    grid-template-areas:
+      "topbar topbar topbar"
+      "rail notebook inspector"
+      "statusbar statusbar statusbar";
+    background: var(--bg);
+    gap: 6px;
+    padding: 6px;
+  }
+
+  .topbar {
+    grid-area: topbar;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 0 14px;
+  }
+  .logo {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    font-size: 15px;
+  }
+  .project-name {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .mode-dial {
+    display: flex;
+    gap: 4px;
+    font-size: 10px;
+  }
+  .mode-item {
+    padding: 3px 9px;
+    border-radius: var(--radius);
+    background: var(--surface-2);
+    box-shadow: var(--bevel);
+    color: var(--text-muted);
+  }
+  .mode-item.active {
+    color: var(--bg);
+    background: var(--accent);
+    box-shadow: var(--glow);
+  }
+  .kernel-status {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+  .kernel-status .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: var(--glow);
+  }
+
+  .rail {
+    grid-area: rail;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 4px;
+    gap: 8px;
+    overflow-y: auto;
+  }
+  .rail-item {
+    width: 100%;
+    text-align: center;
+    padding: 7px 2px;
+    border-radius: var(--radius);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+  }
+  .rail-item .rail-icon { display: block; font-size: 13px; margin-bottom: 3px; }
+  .rail-item.active {
+    color: var(--accent);
+    background: var(--surface-2);
+    box-shadow: var(--bevel);
+    border-left: 2px solid var(--accent);
+  }
+
+  .notebook {
+    grid-area: notebook;
+    overflow-y: auto;
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .cell {
+    padding: 0 0 12px 0;
+    overflow: hidden;
+  }
+  .cell-md { padding-bottom: 14px; }
+  .cell-md h1 {
+    font-family: var(--font-display);
+    font-size: 16px;
+    color: var(--accent);
+    margin: 12px 14px 8px 14px;
+  }
+  .cell-md p {
+    margin: 0 14px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text);
+  }
+  .cell-md code {
+    font-family: var(--font-mono);
+    background: var(--surface-2);
+    padding: 1px 4px;
+    border-radius: 2px;
+    color: var(--accent-2);
+  }
+
+  .cell-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .cell-count {
+    font-family: var(--font-mono);
+    color: var(--accent);
+    font-size: 10px;
+  }
+  .cell-input {
+    margin: 0 14px 10px 14px;
+    padding: 10px 12px;
+    background: var(--bg);
+    border-radius: var(--radius);
+    box-shadow: var(--bevel);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text);
+    overflow-x: auto;
+  }
+  .cell-output {
+    margin: 0 14px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+  .output-table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+  .output-table th, .output-table td {
+    border-bottom: 1px solid var(--border);
+    padding: 4px 8px;
+    text-align: right;
+    color: var(--text);
+  }
+  .output-table th { color: var(--accent); text-transform: uppercase; font-size: 10px; }
+  .output-table td:first-child, .output-table th:first-child { text-align: left; color: var(--text-muted); }
+
+  .cell-error { box-shadow: var(--bevel), 0 0 0 1px var(--danger) inset; }
+  .error-output {
+    margin: 0 14px;
+    padding: 10px 12px;
+    background: var(--bg);
+    border-radius: var(--radius);
+    border-left: 3px solid var(--danger);
+    color: var(--danger);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-x: auto;
+  }
+
+  .cell-running { box-shadow: var(--bevel), 0 0 0 1px var(--accent-2) inset; }
+  .running-indicator {
+    margin-left: auto;
+    width: 44px;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--surface-2);
+    box-shadow: var(--bevel);
+    overflow: hidden;
+    position: relative;
+  }
+  .running-indicator::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--accent-2);
+    opacity: 0.85;
+    animation: pulse-bar 1.3s ease-in-out infinite;
+  }
+  @keyframes pulse-bar {
+    0%, 100% { opacity: 0.25; }
+    50% { opacity: 0.9; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .running-indicator::after { animation: none; opacity: 0.7; }
+  }
+
+  .inspector {
+    grid-area: inspector;
+    padding: 12px;
+    overflow-y: auto;
+  }
+  .inspector-title {
+    font-family: var(--font-display);
+    font-size: 12px;
+    color: var(--accent);
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .var-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1.3fr;
+    gap: 6px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font-mono);
+    font-size: 10px;
+  }
+  .var-name { color: var(--accent-2); }
+  .var-type { color: var(--text-muted); }
+  .var-value { color: var(--text); text-align: right; }
+
+  .statusbar {
+    grid-area: statusbar;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 14px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+  /* cells must not shrink inside the flex column, or overflow:hidden clips them */
+  .notebook > .cell { flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+  <div class="spec-strip">
+    <div class="strip-title">Cockpit &middot; B &middot; Starship Console</div>
+    <div class="strip-desc">Beveled slate panels with tab-shaped headers, teal/orange status LEDs, bridge-console poise.</div>
+    <div class="strip-meta">
+      <span class="swatch"><span class="swatch-color" style="--sw:var(--bg)"></span>bg</span>
+      <span class="swatch"><span class="swatch-color" style="--sw:var(--surface)"></span>surface</span>
+      <span class="swatch"><span class="swatch-color" style="--sw:var(--surface-2)"></span>surface-2</span>
+      <span class="swatch"><span class="swatch-color" style="--sw:var(--border)"></span>border</span>
+      <span class="swatch"><span class="swatch-color" style="--sw:var(--text)"></span>text</span>
+      <span class="swatch"><span class="swatch-color" style="--sw:var(--text-muted)"></span>muted</span>
+      <span class="swatch"><span class="swatch-color" style="--sw:var(--accent)"></span>accent</span>
+      <span class="swatch"><span class="swatch-color" style="--sw:var(--accent-2)"></span>accent-2</span>
+      <span class="swatch"><span class="swatch-color" style="--sw:var(--success)"></span>success</span>
+      <span class="swatch"><span class="swatch-color" style="--sw:var(--warning)"></span>warning</span>
+      <span class="swatch"><span class="swatch-color" style="--sw:var(--danger)"></span>danger</span>
+      <span class="swatch swatch-glow"><span class="swatch-color"></span>glow</span>
+      <span class="fonts-meta">
+        <span>ui: Titillium Web</span>
+        <span>mono: IBM Plex Mono</span>
+        <span>display: Titillium Web</span>
+      </span>
+    </div>
+  </div>
+
+  <div class="app">
+    <div class="topbar panel">
+      <div class="logo">ORBITAL</div>
+      <div class="project-name">hull-stress-analysis</div>
+      <div class="mode-dial">
+        <div class="mode-item">Paper</div>
+        <div class="mode-item">Night Ops</div>
+        <div class="mode-item active">Cockpit</div>
+        <div class="mode-item">Bridge</div>
+      </div>
+      <div class="kernel-status"><span class="dot"></span>Python 3.12 &middot; idle</div>
+    </div>
+
+    <div class="rail panel">
+      <div class="rail-item"><span class="rail-icon">&#9678;</span>Map</div>
+      <div class="rail-item active"><span class="rail-icon">&#9636;</span>Notebook</div>
+      <div class="rail-item"><span class="rail-icon">&#9775;</span>Crew</div>
+      <div class="rail-item"><span class="rail-icon">&#9737;</span>Comms</div>
+      <div class="rail-item"><span class="rail-icon">&#9881;</span>Settings</div>
+    </div>
+
+    <div class="notebook">
+      <div class="cell cell-md panel">
+        <h1>Hull stress analysis</h1>
+        <p>Load the strain-gauge telemetry, fit a simple model, and flag panels above the yield threshold. Data comes from <code>sensors/deck-4/</code> sampled at 200 Hz.</p>
+      </div>
+
+      <div class="cell cell-code panel">
+        <div class="tab-header"><span class="led led-ok"></span><span class="cell-count">[1]</span><span>python</span></div>
+        <div class="cell-header"></div>
+        <pre class="cell-input"><code>import numpy as np
+import pandas as pd
+
+df = pd.read_parquet("sensors/deck-4/strain.parquet")
+df["stress_mpa"] = df["strain"] * 210_000  # steel, E in MPa
+df.describe()</code></pre>
+        <div class="cell-output">
+          <table class="output-table">
+            <thead><tr><th></th><th>strain</th><th>stress_mpa</th><th>temp_c</th></tr></thead>
+            <tbody>
+              <tr><td>mean</td><td>0.00142</td><td>298.2</td><td>23.4</td></tr>
+              <tr><td>std</td><td>0.00031</td><td>65.1</td><td>1.2</td></tr>
+              <tr><td>min</td><td>0.00021</td><td>44.1</td><td>21.0</td></tr>
+              <tr><td>max</td><td>0.00389</td><td>816.9</td><td>26.8</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="cell cell-code cell-error panel">
+        <div class="tab-header"><span class="led led-error"></span><span class="cell-count">[2]</span><span>python</span></div>
+        <pre class="cell-input"><code>threshold = config["yield_mpa"]
+flagged = df[df.stress_mpa > threshold]</code></pre>
+        <pre class="cell-output error-output">NameError                                 Traceback (most recent call last)
+Cell In[2], line 1
+----&gt; 1 threshold = config["yield_mpa"]
+
+NameError: name 'config' is not defined</pre>
+      </div>
+
+      <div class="cell cell-code cell-running panel">
+        <div class="tab-header"><span class="led led-run"></span><span class="cell-count">[*]</span><span>python</span><span class="running-indicator" aria-hidden="true"></span></div>
+        <pre class="cell-input"><code>model = fit_panel_model(df, order=3)</code></pre>
+      </div>
+    </div>
+
+    <div class="inspector panel">
+      <div class="inspector-title">Variables</div>
+      <div class="var-row"><span class="var-name">df</span><span class="var-type">DataFrame</span><span class="var-value">48,000 &times; 3</span></div>
+      <div class="var-row"><span class="var-name">threshold</span><span class="var-type">&mdash;</span><span class="var-value">not defined</span></div>
+      <div class="var-row"><span class="var-name">np</span><span class="var-type">module</span><span class="var-value">numpy 2.1</span></div>
+      <div class="var-row"><span class="var-name">model</span><span class="var-type">&mdash;</span><span class="var-value">computing&hellip;</span></div>
+    </div>
+
+    <div class="statusbar panel">
+      <div class="statusbar-left">3 cells &middot; 2 executed &middot; 1 error</div>
+      <div class="statusbar-right">Star date 2026.256 &middot; 14:32</div>
+    </div>
+  </div>
+
+</body>
+</html>

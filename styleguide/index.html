@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ORBITAL style guide</title>
+<style>
+  :root {
+    --scale: 0.3;
+    --iw: 1280px;
+    --ih: 800px;
+    --bg: #f4f5f7;
+    --surface: #ffffff;
+    --surface-2: #ebedf0;
+    --border: #d8dbe0;
+    --text: #1c1e21;
+    --text-muted: #6b7076;
+    --accent: #3d5afe;
+    --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "Consolas", "SFMono-Regular", Menlo, monospace;
+    --radius: 8px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    overflow-x: hidden;
+  }
+
+  header.page-head {
+    padding: 28px 32px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  header.page-head h1 {
+    margin: 0 0 4px;
+    font-size: 1.6rem;
+    letter-spacing: 0.03em;
+  }
+
+  header.page-head p.tagline {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+  }
+
+  .scale-toggle {
+    margin-top: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+
+  .scale-toggle label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+  }
+
+  .scale-toggle input {
+    accent-color: var(--accent);
+  }
+
+  main {
+    padding: 8px 32px 40px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  section.mode-section {
+    margin-top: 36px;
+  }
+
+  section.mode-section h2 {
+    margin: 0 0 2px;
+    font-size: 1.15rem;
+  }
+
+  section.mode-section p.intent {
+    margin: 0 0 16px;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    max-width: 70ch;
+  }
+
+  .grid-2x2 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+
+  a.card {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: border-color 0.15s ease;
+  }
+
+  a.card:hover {
+    border-color: var(--accent);
+  }
+
+  .card-head em { font-style: normal; opacity: 0.6; font-weight: 400; }
+  .card-head {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9rem;
+    font-weight: 600;
+    background: var(--surface-2);
+  }
+
+  .preview-frame {
+    width: 100%;
+    height: calc(var(--ih) * var(--scale));
+    overflow: hidden;
+    background: #222;
+  }
+
+  .preview-frame iframe {
+    width: var(--iw);
+    height: var(--ih);
+    border: 0;
+    transform: scale(var(--scale));
+    transform-origin: top left;
+    pointer-events: none;
+  }
+
+  .notes-box {
+    margin-top: 40px;
+    padding: 18px 22px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    max-width: 70ch;
+  }
+
+  .notes-box h3 {
+    margin: 0 0 10px;
+    font-size: 1rem;
+  }
+
+  .notes-box ul {
+    margin: 0;
+    padding-left: 20px;
+    color: var(--text);
+    font-size: 0.92rem;
+    line-height: 1.7;
+  }
+
+  footer.spacer {
+    height: 20px;
+  }
+</style>
+</head>
+<body>
+
+<header class="page-head">
+  <h1>ORBITAL style guide</h1>
+  <p class="tagline">Four modes, four directions each. Click a card to open it full size.</p>
+  <div class="scale-toggle" id="scaleToggle">
+    <span>Preview scale:</span>
+    <label><input type="radio" name="scale" value="0.25"> 0.25</label>
+    <label><input type="radio" name="scale" value="0.3" checked> 0.3</label>
+    <label><input type="radio" name="scale" value="0.4"> 0.4</label>
+  </div>
+</header>
+
+<main>
+
+  <section class="mode-section">
+    <h2>Paper</h2>
+    <p class="intent">Light mode, maximum readability, long-session comfort — sci-fi lives in typography and line work, not glow or motion.</p>
+    <div class="grid-2x2">
+      <a class="card" href="paper/paper-a-lab-notebook.html" target="_blank">
+        <div class="card-head">A &middot; Lab Notebook</div>
+        <div class="preview-frame"><iframe src="paper/paper-a-lab-notebook.html" loading="lazy"></iframe></div>
+      </a>
+      <a class="card" href="paper/paper-b-clinical.html" target="_blank">
+        <div class="card-head">B &middot; Clinical</div>
+        <div class="preview-frame"><iframe src="paper/paper-b-clinical.html" loading="lazy"></iframe></div>
+      </a>
+      <a class="card" href="paper/paper-c-blueprint.html" target="_blank">
+        <div class="card-head">C &middot; Blueprint</div>
+        <div class="preview-frame"><iframe src="paper/paper-c-blueprint.html" loading="lazy"></iframe></div>
+      </a>
+      <a class="card" href="paper/paper-d-terminal-light.html" target="_blank">
+        <div class="card-head">D &middot; Terminal Light</div>
+        <div class="preview-frame"><iframe src="paper/paper-d-terminal-light.html" loading="lazy"></iframe></div>
+      </a>
+      <a class="card" href="paper/paper-e-clinical-terminal.html" target="_blank">
+        <div class="card-head">E &middot; Clinical Terminal &middot; <em>hand-written</em></div>
+        <div class="preview-frame"><iframe src="paper/paper-e-clinical-terminal.html" loading="lazy"></iframe></div>
+      </a>
+    </div>
+  </section>
+
+  <section class="mode-section">
+    <h2>Night Ops</h2>
+    <p class="intent">Dark mode, calm, low-contrast surfaces, one restrained accent — the mode you use at 2am.</p>
+    <div class="grid-2x2">
+      <a class="card" href="night-ops/night-ops-a-deep-space.html" target="_blank">
+        <div class="card-head">A &middot; Deep Space</div>
+        <div class="preview-frame"><iframe src="night-ops/night-ops-a-deep-space.html" loading="lazy"></iframe></div>
+      </a>
+      <a class="card" href="night-ops/night-ops-b-graphite.html" target="_blank">
+        <div class="card-head">B &middot; Graphite</div>
+        <div class="preview-frame"><iframe src="night-ops/night-ops-b-graphite.html" loading="lazy"></iframe></div>
+      </a>
+      <a class="card" href="night-ops/night-ops-c-phosphor.html" target="_blank">
+        <div class="card-head">C &middot; Phosphor</div>
+        <div class="preview-frame"><iframe src="night-ops/night-ops-c-phosphor.html" loading="lazy"></iframe></div>
+      </a>
+      <a class="card" href="night-ops/night-ops-d-midnight-violet.html" target="_blank">
+        <div class="card-head">D &middot; Midnight Violet</div>
+        <div class="preview-frame"><iframe src="night-ops/night-ops-d-midnight-violet.html" loading="lazy"></iframe></div>
+      </a>
+      <a class="card" href="night-ops/night-ops-e-aurora.html" target="_blank">
+        <div class="card-head">E &middot; Aurora &middot; <em>hand-written</em></div>
+        <div class="preview-frame"><iframe src="night-ops/night-ops-e-aurora.html" loading="lazy"></iframe></div>
+      </a>
+    </div>
+  </section>
+
+  <section class="mode-section">
+    <h2>Cockpit</h2>
+    <p class="intent">Dense HUD — small type, tight spacing, framed panels, corner brackets, readouts. Feels like an instrument panel.</p>
+    <div class="grid-2x2">
+      <a class="card" href="cockpit/cockpit-a-fighter-hud.html" target="_blank">
+        <div class="card-head">A &middot; Fighter HUD</div>
+        <div class="preview-frame"><iframe src="cockpit/cockpit-a-fighter-hud.html" loading="lazy"></iframe></div>
+      </a>
+      <a class="card" href="cockpit/cockpit-b-starship-console.html" target="_blank">
+        <div class="card-head">B &middot; Starship Console</div>
+        <div class="preview-frame"><iframe src="cockpit/cockpit-b-starship-console.html" loading="lazy"></iframe></div>
+      </a>
+      <a class="card" href="cockpit/cockpit-c-mech.html" target="_blank">
+        <div class="card-head">C &middot; Mech</div>
+        <div class="preview-frame"><iframe src="cockpit/cockpit-c-mech.html" loading="lazy"></iframe></div>
+      </a>
+      <a class="card" href="cockpit/cockpit-d-glass-cockpit.html" target="_blank">
+        <div class="card-head">D &middot; Glass Cockpit</div>
+        <div class="preview-frame"><iframe src="cockpit/cockpit-d-glass-cockpit.html" loading="lazy"></iframe></div>
+      </a>
+      <a class="card" href="cockpit/cockpit-e-glass-deck.html" target="_blank">
+        <div class="card-head">E &middot; Glass Deck &middot; <em>hand-written</em></div>
+        <div class="preview-frame"><iframe src="cockpit/cockpit-e-glass-deck.html" loading="lazy"></iframe></div>
+      </a>
+    </div>
+  </section>
+
+  <section class="mode-section">
+    <h2>Bridge</h2>
+    <p class="intent">The full show — animated backgrounds, glow, holographic panels, particles or orbit rings, scanlines if it fits.</p>
+    <div class="grid-2x2">
+      <a class="card" href="bridge/bridge-a-nebula.html" target="_blank">
+        <div class="card-head">A &middot; Nebula</div>
+        <div class="preview-frame"><iframe src="bridge/bridge-a-nebula.html" loading="lazy"></iframe></div>
+      </a>
+      <a class="card" href="bridge/bridge-b-retro-crt.html" target="_blank">
+        <div class="card-head">B &middot; Retro CRT</div>
+        <div class="preview-frame"><iframe src="bridge/bridge-b-retro-crt.html" loading="lazy"></iframe></div>
+      </a>
+      <a class="card" href="bridge/bridge-c-holodeck.html" target="_blank">
+        <div class="card-head">C &middot; Holodeck</div>
+        <div class="preview-frame"><iframe src="bridge/bridge-c-holodeck.html" loading="lazy"></iframe></div>
+      </a>
+      <a class="card" href="bridge/bridge-d-synthwave.html" target="_blank">
+        <div class="card-head">D &middot; Synthwave</div>
+        <div class="preview-frame"><iframe src="bridge/bridge-d-synthwave.html" loading="lazy"></iframe></div>
+      </a>
+      <a class="card" href="bridge/bridge-e-nebula-drift.html" target="_blank">
+        <div class="card-head">E &middot; Nebula Drift &middot; <em>hand-written</em></div>
+        <div class="preview-frame"><iframe src="bridge/bridge-e-nebula-drift.html" loading="lazy"></iframe></div>
+      </a>
+    </div>
+  </section>
+
+  <div class="notes-box">
+    <h3>Notes</h3>
+    <ul>
+      <li>Readability of code at normal size (open full, not the shrunk preview)</li>
+      <li>Comfort over a long session — does it tire the eyes?</li>
+      <li>How distinct is it from the other three in its mode?</li>
+      <li>Does the sci-fi feel come through without being noisy?</li>
+    </ul>
+  </div>
+
+</main>
+
+<script>
+  document.getElementById('scaleToggle').addEventListener('change', function (e) {
+    if (e.target.name === 'scale') {
+      document.documentElement.style.setProperty('--scale', e.target.value);
+    }
+  });
+</script>
+
+</body>
+</html>

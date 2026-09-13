@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bridge / Nebula Drift</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Orbitron:wght@600&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* Mode: Bridge — Variant E: Nebula Drift */
+  --bg: #090a17;
+  --surface: #12142a;
+  --surface-2: #1a1d3a;
+  --border: #33366a;
+  --text: #e8e9fb;
+  --text-muted: #9497c4;
+  --accent: #4fd8e8;
+  --accent-2: #b98af0;
+  --success: #4fe8a6;
+  --warning: #f0c85a;
+  --danger: #f2607e;
+  --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', Consolas, 'Courier New', monospace;
+  --font-display: 'Orbitron', 'Inter', sans-serif;
+  --radius: 10px;
+  --glow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent), 0 0 28px color-mix(in srgb, var(--accent-2) 22%, transparent);
+  --nebula-1: #5a33ad;
+  --nebula-2: #1f86a8;
+  --nebula-3: #922c74;
+  --star-rgb: 232, 236, 255;
+  --gutter: 60px;
+  --rail-w: 88px;
+  --inspector-w: 284px;
+  --panel: color-mix(in srgb, var(--surface) 74%, transparent);
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 400 13px/1.5 var(--font-ui);
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* ---- sky: fixed layers behind everything ------------------------------- */
+.sky { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.cloud {
+  position: absolute;
+  width: 70vw; height: 70vw;
+  border-radius: 50%;
+  opacity: 0.85;
+  will-change: transform;
+}
+.cloud.c1 { left: -20vw; top: -30vw; background: radial-gradient(closest-side, var(--nebula-1), transparent 68%); animation: drift1 120s ease-in-out infinite alternate; }
+.cloud.c2 { right: -25vw; top: 5vw; background: radial-gradient(closest-side, var(--nebula-2), transparent 68%); animation: drift2 150s ease-in-out infinite alternate; }
+.cloud.c3 { left: 20vw; bottom: -45vw; background: radial-gradient(closest-side, var(--nebula-3), transparent 68%); animation: drift3 135s ease-in-out infinite alternate; }
+@keyframes drift1 { to { transform: translate(9vw, 6vw) rotate(12deg); } }
+@keyframes drift2 { to { transform: translate(-8vw, 9vw) rotate(-10deg); } }
+@keyframes drift3 { to { transform: translate(-10vw, -7vw) rotate(8deg); } }
+
+/* two star layers; the near one drifts faster for parallax */
+.stars { position: absolute; inset: -10%; width: 1px; height: 1px; border-radius: 50%; background: transparent; will-change: transform; }
+.stars.far  { opacity: 0.55; animation: parallax 240s linear infinite; }
+.stars.near { opacity: 0.9;  animation: parallax 120s linear infinite; }
+@keyframes parallax { from { transform: translate3d(0,0,0); } to { transform: translate3d(-80px, 40px, 0); } }
+
+/* one shooting star, on a long cycle */
+.streak {
+  position: absolute;
+  top: 18%; left: 62%;
+  width: 140px; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--text), transparent);
+  transform: rotate(-28deg) translateX(0);
+  opacity: 0;
+  animation: streak 16s linear infinite;
+  animation-delay: 4s;
+}
+@keyframes streak {
+  0%   { opacity: 0; transform: rotate(-28deg) translateX(0); }
+  2%   { opacity: 0.9; }
+  6%   { opacity: 0; transform: rotate(-28deg) translateX(-420px); }
+  100% { opacity: 0; transform: rotate(-28deg) translateX(-420px); }
+}
+
+/* ---- spec strip -------------------------------------------------------- */
+.spec-strip {
+  position: relative; z-index: 1;
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 24px;
+  align-items: center;
+  padding: 10px 20px;
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.spec-strip h1 { margin: 0 0 2px; font-size: 12px; font-weight: 600; }
+.spec-strip p { margin: 0; color: var(--text-muted); max-width: 60ch; }
+.swatches { display: flex; gap: 6px; }
+.swatch { display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--text-muted); font-size: 9.5px; }
+.swatch i { width: 18px; height: 18px; border: 1px solid var(--border); border-radius: 4px; display: block; }
+.fonts { color: var(--text-muted); white-space: nowrap; }
+.fonts b { color: var(--text); font-weight: 500; }
+
+/* ---- app frame --------------------------------------------------------- */
+.app {
+  position: relative; z-index: 1;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: var(--rail-w) 1fr var(--inspector-w);
+  grid-template-rows: 52px 1fr 26px;
+  grid-template-areas:
+    "topbar topbar topbar"
+    "rail notebook inspector"
+    "status status status";
+}
+
+/* topbar */
+.topbar {
+  grid-area: topbar;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 20px;
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.logo {
+  font: 600 13px/1 var(--font-display);
+  letter-spacing: 0.24em;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.project-name { font: 400 12.5px/1 var(--font-mono); color: var(--text-muted); }
+.project-name::before { content: "deck-4 / "; opacity: 0.7; }
+.project-name b { color: var(--text); font-weight: 500; }
+.mode-dial { margin-left: auto; display: flex; gap: 4px; }
+.mode-dial span { padding: 6px 12px; border-radius: 999px; color: var(--text-muted); font-size: 12px; border: 1px solid transparent; }
+.mode-dial span.active {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.kernel-status { display: flex; align-items: center; gap: 8px; font: 400 12px/1 var(--font-mono); color: var(--text-muted); }
+.kernel-status i { width: 7px; height: 7px; border-radius: 50%; background: var(--success); box-shadow: 0 0 10px var(--success); }
+
+/* rail */
+.rail {
+  grid-area: rail;
+  padding: 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-right: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+.rail-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 0;
+  color: var(--text-muted);
+  font-size: 10.5px;
+}
+.rail-item.active { color: var(--text); }
+.rail-item.active svg { color: var(--accent); filter: drop-shadow(0 0 6px var(--accent)); }
+.rail-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 8px; bottom: 8px;
+  width: 2px;
+  background: linear-gradient(var(--accent), var(--accent-2));
+  box-shadow: 0 0 10px var(--accent);
+}
+.rail svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+
+/* notebook */
+.notebook { grid-area: notebook; overflow-y: auto; padding: 24px 28px 48px 0; }
+.cell { display: grid; grid-template-columns: var(--gutter) 1fr; margin-bottom: 18px; }
+.gutter {
+  text-align: right;
+  padding: 12px 12px 0 0;
+  color: var(--text-muted);
+  font: 500 11.5px/1.4 var(--font-mono);
+  user-select: none;
+}
+.gutter .count { display: block; }
+.gutter .out-label { display: block; margin-top: 8px; font-size: 10px; opacity: 0.8; }
+.cell-body {
+  position: relative;
+  background: var(--panel);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  border-radius: var(--radius);
+  overflow: hidden;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 8%, transparent), 0 10px 30px color-mix(in srgb, var(--bg) 60%, transparent);
+}
+.cell-code .cell-body pre {
+  margin: 0;
+  padding: 14px 18px;
+  font: 400 13.5px/1.6 var(--font-mono);
+  white-space: pre;
+  overflow-x: auto;
+}
+.cell-code.executed .gutter .count { color: var(--accent); text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 60%, transparent); }
+.cell-output {
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--bg) 45%, transparent);
+  padding: 12px 18px 14px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+/* markdown cell */
+.cell-md .cell-body { padding: 20px 22px 18px; }
+.cell-md h1 { margin: 0 0 8px; font: 600 22px/1.25 var(--font-ui); letter-spacing: -0.015em; }
+.cell-md p { margin: 0; font-size: 14.5px; line-height: 1.65; color: color-mix(in srgb, var(--text) 88%, var(--text-muted)); max-width: 76ch; }
+.cell-md code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  color: var(--accent-2);
+  background: color-mix(in srgb, var(--accent-2) 14%, transparent);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+/* output table */
+.output-table { border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.output-table th, .output-table td { padding: 4px 20px 4px 0; text-align: right; }
+.output-table th { font-weight: 500; color: var(--accent); border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent); }
+.output-table td:first-child, .output-table th:first-child { text-align: left; color: var(--text-muted); padding-right: 26px; }
+
+/* error cell */
+.cell-error .gutter .count { color: var(--danger); text-shadow: 0 0 8px color-mix(in srgb, var(--danger) 60%, transparent); }
+.cell-error .cell-body { border-color: color-mix(in srgb, var(--danger) 50%, transparent); box-shadow: 0 0 22px color-mix(in srgb, var(--danger) 18%, transparent); }
+.traceback {
+  margin: 0;
+  padding: 12px 18px 14px;
+  border-top: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  font: 400 12.5px/1.6 var(--font-mono);
+  color: var(--danger);
+  white-space: pre;
+  overflow-x: auto;
+}
+.traceback .dim { opacity: 0.7; }
+.traceback .hl { display: inline-block; width: calc(100% + 36px); margin: 0 -18px; padding: 0 18px; background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--text); }
+
+/* running cell: light sweeps along the top edge */
+.cell-running .gutter .count { color: var(--warning); }
+.cell-running .cell-body { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.cell-running .sweep {
+  position: absolute;
+  left: 0; top: 0;
+  width: 35%; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), var(--accent-2), transparent);
+  animation: sweep 2.2s ease-in-out infinite;
+}
+@keyframes sweep { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+.cell-running .status-line {
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  padding: 8px 18px;
+  font: 500 11px/1.4 var(--font-mono);
+  color: var(--warning);
+  display: flex; gap: 8px; align-items: center;
+}
+.cell-running .status-line i { width: 6px; height: 6px; border-radius: 50%; background: var(--warning); box-shadow: 0 0 8px var(--warning); animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* inspector */
+.inspector {
+  grid-area: inspector;
+  padding: 20px 20px 0;
+  overflow-y: auto;
+  border-left: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  background: color-mix(in srgb, var(--surface) 40%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.inspector-title {
+  margin: 0 0 10px;
+  font: 600 10.5px/1 var(--font-display);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent-2);
+}
+.var-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  align-items: baseline;
+}
+.var-row:last-child { border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent); }
+.var-row .name { color: var(--text); font-weight: 500; }
+.var-row .type { display: block; font-size: 10.5px; margin-top: 2px; color: var(--text-muted); }
+.var-row .type.frame { color: var(--accent-2); }
+.var-row .type.module { color: var(--accent); }
+.var-row .value { color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.var-row.pending .value { color: var(--text-muted); font-style: italic; }
+
+/* statusbar */
+.statusbar {
+  grid-area: status;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  color: var(--text-muted);
+  font: 400 11px/1 var(--font-mono);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+  .streak { display: none; }
+  .cell-running .sweep { width: 100%; opacity: 0.7; }
+}
+</style>
+</head>
+<body>
+
+<div class="sky" aria-hidden="true">
+  <div class="cloud c1"></div>
+  <div class="cloud c2"></div>
+  <div class="cloud c3"></div>
+  <div class="stars far" id="stars-far"></div>
+  <div class="stars near" id="stars-near"></div>
+  <div class="streak"></div>
+</div>
+
+<div class="spec-strip">
+  <div>
+    <h1>Bridge · E · Nebula Drift</h1>
+    <p>Nebula's palette with Synthwave's sense of motion: three cloud layers drift on long cycles, two star fields move at different speeds for parallax, and a shooting star crosses every sixteen seconds.</p>
+  </div>
+  <div class="swatches">
+    <span class="swatch"><i style="background:var(--bg)"></i>bg</span>
+    <span class="swatch"><i style="background:var(--surface)"></i>surface</span>
+    <span class="swatch"><i style="background:var(--surface-2)"></i>surface-2</span>
+    <span class="swatch"><i style="background:var(--border)"></i>border</span>
+    <span class="swatch"><i style="background:var(--text)"></i>text</span>
+    <span class="swatch"><i style="background:var(--text-muted)"></i>muted</span>
+    <span class="swatch"><i style="background:var(--accent)"></i>accent</span>
+    <span class="swatch"><i style="background:var(--accent-2)"></i>accent-2</span>
+    <span class="swatch"><i style="background:var(--success)"></i>success</span>
+    <span class="swatch"><i style="background:var(--warning)"></i>warning</span>
+    <span class="swatch"><i style="background:var(--danger)"></i>danger</span>
+    <span class="swatch"><i style="box-shadow:var(--glow)"></i>glow</span>
+  </div>
+  <div class="fonts">ui: <b>Inter</b><br>mono: <b>JetBrains Mono</b><br>display: <b>Orbitron</b></div>
+</div>
+
+<div class="app">
+  <header class="topbar">
+    <span class="logo">ORBITAL</span>
+    <span class="project-name"><b>hull-stress-analysis</b></span>
+    <nav class="mode-dial">
+      <span>Paper</span><span>Night Ops</span><span>Cockpit</span><span class="active">Bridge</span>
+    </nav>
+    <span class="kernel-status"><i></i>Python 3.12 · idle</span>
+  </header>
+
+  <nav class="rail">
+    <a class="rail-item"><svg viewBox="0 0 16 16"><path d="M1.5 3.5 6 2l4 1.5L14.5 2v10.5L10 14l-4-1.5L1.5 14z"/><path d="M6 2v10.5M10 3.5V14"/></svg>Map</a>
+    <a class="rail-item active"><svg viewBox="0 0 16 16"><rect x="3" y="1.5" width="10" height="13" rx="1"/><path d="M5.5 5h5M5.5 8h5M5.5 11h3"/></svg>Notebook</a>
+    <a class="rail-item"><svg viewBox="0 0 16 16"><circle cx="6" cy="5.5" r="2.5"/><circle cx="11.5" cy="6.5" r="2"/><path d="M1.5 14c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4M10.5 10.5c2 0 4 1 4 3.5"/></svg>Crew</a>
+    <a class="rail-item"><svg viewBox="0 0 16 16"><path d="M2 3h12v8H7l-3.5 3v-3H2z"/></svg>Comms</a>
+    <a class="rail-item"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.5"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg>Settings</a>
+  </nav>
+
+  <main class="notebook">
+    <section class="cell cell-md">
+      <div class="gutter"></div>
+      <div class="cell-body">
+        <h1>Hull stress analysis</h1>
+        <p>Load the strain-gauge telemetry, fit a simple model, and flag panels above the yield threshold. Data comes from <code>sensors/deck-4/</code> sampled at 200 Hz.</p>
+      </div>
+    </section>
+
+    <section class="cell cell-code executed">
+      <div class="gutter"><span class="count">[1]</span><span class="out-label">out</span></div>
+      <div class="cell-body">
+<pre>import numpy as np
+import pandas as pd
+
+df = pd.read_parquet("sensors/deck-4/strain.parquet")
+df["stress_mpa"] = df["strain"] * 210_000  # steel, E in MPa
+df.describe()</pre>
+        <div class="cell-output">
+          <table class="output-table">
+            <thead><tr><th></th><th>strain</th><th>stress_mpa</th><th>temp_c</th></tr></thead>
+            <tbody>
+              <tr><td>mean</td><td>0.001420</td><td>298.20</td><td>21.4</td></tr>
+              <tr><td>std</td><td>0.000310</td><td>65.10</td><td>1.8</td></tr>
+              <tr><td>min</td><td>0.000580</td><td>121.80</td><td>18.1</td></tr>
+              <tr><td>max</td><td>0.002510</td><td>527.10</td><td>24.9</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="cell cell-code cell-error">
+      <div class="gutter"><span class="count">[2]</span><span class="out-label">err</span></div>
+      <div class="cell-body">
+<pre>threshold = config["yield_mpa"]
+flagged = df[df.stress_mpa &gt; threshold]</pre>
+<pre class="traceback"><span class="dim">NameError                                 Traceback (most recent call last)</span>
+<span class="dim">Cell In[2], line 1</span>
+<span class="hl">----&gt; 1 threshold = config["yield_mpa"]</span>
+
+NameError: name 'config' is not defined</pre>
+      </div>
+    </section>
+
+    <section class="cell cell-code cell-running">
+      <div class="gutter"><span class="count">[*]</span></div>
+      <div class="cell-body">
+        <i class="sweep"></i>
+<pre>model = fit_panel_model(df, order=3)</pre>
+        <div class="status-line"><i></i>running · 00:04</div>
+      </div>
+    </section>
+  </main>
+
+  <aside class="inspector">
+    <h2 class="inspector-title">Variables</h2>
+    <div class="var-row"><span class="name">df<span class="type frame">DataFrame</span></span><span class="value">48,000 × 3</span></div>
+    <div class="var-row pending"><span class="name">threshold<span class="type">—</span></span><span class="value">not defined</span></div>
+    <div class="var-row"><span class="name">np<span class="type module">module</span></span><span class="value">numpy 2.1</span></div>
+    <div class="var-row pending"><span class="name">model<span class="type">—</span></span><span class="value">computing…</span></div>
+  </aside>
+
+  <footer class="statusbar">
+    <span>3 cells · 2 executed · 1 error</span>
+    <span>Star date 2026.256 · 14:32</span>
+  </footer>
+</div>
+
+<script>
+// Two star fields as box-shadow lists. Seeded so the sky is the same on every load.
+(function () {
+  var seed = 7;
+  var star = getComputedStyle(document.documentElement).getPropertyValue('--star-rgb').trim();
+  function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+  function field(count, w, h, maxSize) {
+    var shadows = [];
+    for (var i = 0; i < count; i++) {
+      var x = Math.round(rnd() * w), y = Math.round(rnd() * h);
+      var s = (rnd() * maxSize).toFixed(1);
+      var a = (0.35 + rnd() * 0.65).toFixed(2);
+      shadows.push(x + 'px ' + y + 'px 0 ' + s + 'px rgba(' + star + ', ' + a + ')');
+    }
+    return shadows.join(',');
+  }
+  var w = Math.max(window.innerWidth, 1600) * 1.2, h = Math.max(window.innerHeight, 1000) * 1.2;
+  document.getElementById('stars-far').style.boxShadow = field(220, w, h, 0.6);
+  document.getElementById('stars-near').style.boxShadow = field(70, w, h, 1.1);
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cockpit / Fighter HUD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* Mode: Cockpit — Variant A: Fighter HUD */
+    --bg: #030a05;
+    --surface: #071409;
+    --surface-2: #0c1f10;
+    --border: #1c4a26;
+    --text: #baffd0;
+    --text-muted: #5f9c74;
+    --accent: #39ff6a;
+    --accent-2: #ffb020;
+    --success: #39ff6a;
+    --warning: #ffcc33;
+    --danger: #ff4444;
+    --font-ui: 'Rajdhani', 'Consolas', sans-serif;
+    --font-mono: 'Share Tech Mono', 'Consolas', monospace;
+    --font-display: 'Rajdhani', 'Consolas', sans-serif;
+    --radius: 2px;
+    --glow: 0 0 8px rgba(57,255,106,0.55);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ---------- corner bracket frame, used on every panel ---------- */
+  .bracketed { position: relative; }
+  .bracketed::before {
+    content: "";
+    position: absolute;
+    inset: 4px;
+    pointer-events: none;
+    background:
+      linear-gradient(to right, var(--accent) 2px, transparent 2px) top left / 12px 2px no-repeat,
+      linear-gradient(to right, var(--accent) 2px, transparent 2px) bottom left / 12px 2px no-repeat,
+      linear-gradient(to left,  var(--accent) 2px, transparent 2px) top right / 12px 2px no-repeat,
+      linear-gradient(to left,  var(--accent) 2px, transparent 2px) bottom right / 12px 2px no-repeat,
+      linear-gradient(to bottom, var(--accent) 2px, transparent 2px) top left / 2px 12px no-repeat,
+      linear-gradient(to bottom, var(--accent) 2px, transparent 2px) top right / 2px 12px no-repeat,
+      linear-gradient(to top, var(--accent) 2px, transparent 2px) bottom left / 2px 12px no-repeat,
+      linear-gradient(to top, var(--accent) 2px, transparent 2px) bottom right / 2px 12px no-repeat;
+    opacity: 0.75;
+  }
+
+  /* ---------- spec strip ---------- */
+  .spec-strip {
+    flex: 0 0 auto;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 6px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-family: var(--font-mono);
+  }
+  .strip-title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 12px;
+    color: var(--accent);
+  }
+  .strip-desc {
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+  .strip-meta {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex-wrap: wrap;
+    font-size: 9px;
+    color: var(--text-muted);
+  }
+  .swatch { display: inline-flex; align-items: center; gap: 3px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .swatch-color {
+    width: 10px;
+    height: 10px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    display: inline-block;
+    background: var(--sw);
+  }
+  .swatch-glow .swatch-color { background: var(--surface-2); box-shadow: var(--glow); }
+  .fonts-meta {
+    margin-left: auto;
+    display: flex;
+    gap: 12px;
+  }
+
+  /* ---------- app shell ---------- */
+  .app {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 70px 1fr 240px;
+    grid-template-rows: 48px 1fr 28px;
+    grid-template-areas:
+      "topbar topbar topbar"
+      "rail notebook inspector"
+      "statusbar statusbar statusbar";
+    background: var(--bg);
+  }
+
+  .topbar {
+    grid-area: topbar;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 0 14px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .logo {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    color: var(--accent);
+    font-size: 15px;
+    text-shadow: var(--glow);
+  }
+  .project-name {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .mode-dial {
+    display: flex;
+    gap: 4px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .mode-item {
+    padding: 3px 8px;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+  }
+  .mode-item.active {
+    color: var(--bg);
+    background: var(--accent);
+    border-color: var(--accent);
+    box-shadow: var(--glow);
+  }
+  .kernel-status {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+  .kernel-status .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: var(--glow);
+  }
+  .hud-readout {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: var(--accent-2);
+  }
+
+  .rail {
+    grid-area: rail;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 4px;
+    gap: 10px;
+    overflow-y: auto;
+  }
+  .rail-item {
+    width: 100%;
+    text-align: center;
+    padding: 6px 2px;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    border: 1px solid transparent;
+  }
+  .rail-item .rail-icon { display: block; font-size: 13px; margin-bottom: 2px; }
+  .rail-item.active {
+    color: var(--accent);
+    border-color: var(--border);
+    background: var(--surface-2);
+    box-shadow: var(--glow);
+  }
+
+  .notebook {
+    grid-area: notebook;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .cell {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+  }
+  .cell-md h1 {
+    font-family: var(--font-display);
+    font-size: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+    margin: 0 0 8px 0;
+  }
+  .cell-md p {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text);
+  }
+  .cell-md code {
+    font-family: var(--font-mono);
+    background: var(--surface-2);
+    padding: 1px 4px;
+    color: var(--accent-2);
+  }
+
+  .cell-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+  }
+  .cell-count {
+    color: var(--accent);
+    border: 1px solid var(--border);
+    padding: 1px 6px;
+  }
+  .cell-input {
+    margin: 0 0 10px 0;
+    padding: 10px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text);
+    overflow-x: auto;
+  }
+  .cell-output {
+    font-family: var(--font-mono);
+    font-size: 11px;
+  }
+  .output-table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+  .output-table th, .output-table td {
+    border: 1px solid var(--border);
+    padding: 4px 8px;
+    text-align: right;
+    color: var(--text);
+  }
+  .output-table th { color: var(--accent); text-transform: uppercase; font-size: 10px; }
+  .output-table td:first-child, .output-table th:first-child { text-align: left; color: var(--text-muted); }
+
+  .cell-error {
+    border-color: var(--danger);
+  }
+  .error-output {
+    margin: 0;
+    padding: 10px;
+    background: var(--bg);
+    border: 1px solid var(--danger);
+    color: var(--danger);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-x: auto;
+  }
+
+  .cell-running {
+    border-color: var(--accent-2);
+  }
+  .running-indicator {
+    position: relative;
+    width: 46px;
+    height: 6px;
+    border: 1px solid var(--accent-2);
+    overflow: hidden;
+    margin-left: auto;
+  }
+  .running-indicator::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -30%;
+    width: 30%;
+    height: 100%;
+    background: var(--accent-2);
+    box-shadow: var(--glow);
+    animation: sweep 1.1s linear infinite;
+  }
+  @keyframes sweep {
+    0% { left: -30%; }
+    100% { left: 100%; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .running-indicator::after { animation: none; left: 10%; }
+  }
+
+  .inspector {
+    grid-area: inspector;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    padding: 12px;
+    overflow-y: auto;
+  }
+  .inspector-title {
+    font-family: var(--font-display);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    margin-bottom: 10px;
+  }
+  .var-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1.3fr;
+    gap: 6px;
+    padding: 5px 0;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font-mono);
+    font-size: 10px;
+  }
+  .var-name { color: var(--accent-2); }
+  .var-type { color: var(--text-muted); }
+  .var-value { color: var(--text); text-align: right; }
+
+  .statusbar {
+    grid-area: statusbar;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 14px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+</style>
+</head>
+<body>
+
+  <div class="spec-strip">
+    <div class="strip-title">Cockpit &middot; A &middot; Fighter HUD</div>
+    <div class="strip-desc">Phosphor-green wireframe HUD: corner-bracketed panels, all-caps condensed labels, dark cockpit glass.</div>
+    <div class="strip-meta">
+      <span class="swatch"><span class="swatch-color" style="--sw:var(--bg)"></span>bg</span>
+      <span class="swatch"><span class="swatch-color" style="--sw:var(--surface)"></span>surface</span>
+      <span class="swatch"><span class="swatch-color" style="--sw:var(--surface-2)"></span>surface-2</span>
+      <span class="swatch"><span class="swatch-color" style="--sw:var(--border)"></span>border</span>
+      <span class="swatch"><span class="swatch-color" style="--sw:var(--text)"></span>text</span>
+      <span class="swatch"><span class="swatch-color" style="--sw:var(--text-muted)"></span>muted</span>
+      <span class="swatch"><span class="swatch-color" style="--sw:var(--accent)"></span>accent</span>
+      <span class="swatch"><span class="swatch-color" style="--sw:var(--accent-2)"></span>accent-2</span>
+      <span class="swatch"><span class="swatch-color" style="--sw:var(--success)"></span>success</span>
+      <span class="swatch"><span class="swatch-color" style="--sw:var(--warning)"></span>warning</span>
+      <span class="swatch"><span class="swatch-color" style="--sw:var(--danger)"></span>danger</span>
+      <span class="swatch swatch-glow"><span class="swatch-color"></span>glow</span>
+      <span class="fonts-meta">
+        <span>ui: Rajdhani</span>
+        <span>mono: Share Tech Mono</span>
+        <span>display: Rajdhani</span>
+      </span>
+    </div>
+  </div>
+
+  <div class="app">
+    <div class="topbar bracketed">
+      <div class="logo">ORBITAL</div>
+      <div class="project-name">hull-stress-analysis</div>
+      <div class="mode-dial">
+        <div class="mode-item">Paper</div>
+        <div class="mode-item">Night Ops</div>
+        <div class="mode-item active">Cockpit</div>
+        <div class="mode-item">Bridge</div>
+      </div>
+      <div class="hud-readout">KRN &#9646;&#9646;&#9646;&#9647; IDLE</div>
+      <div class="kernel-status"><span class="dot"></span>Python 3.12 &middot; idle</div>
+    </div>
+
+    <div class="rail bracketed">
+      <div class="rail-item"><span class="rail-icon">&#9678;</span>Map</div>
+      <div class="rail-item active"><span class="rail-icon">&#9636;</span>Notebook</div>
+      <div class="rail-item"><span class="rail-icon">&#9775;</span>Crew</div>
+      <div class="rail-item"><span class="rail-icon">&#9737;</span>Comms</div>
+      <div class="rail-item"><span class="rail-icon">&#9881;</span>Settings</div>
+    </div>
+
+    <div class="notebook">
+      <div class="cell cell-md bracketed">
+        <h1>Hull stress analysis</h1>
+        <p>Load the strain-gauge telemetry, fit a simple model, and flag panels above the yield threshold. Data comes from <code>sensors/deck-4/</code> sampled at 200 Hz.</p>
+      </div>
+
+      <div class="cell cell-code bracketed">
+        <div class="cell-header"><span class="cell-count">[1]</span><span>python</span></div>
+        <pre class="cell-input"><code>import numpy as np
+import pandas as pd
+
+df = pd.read_parquet("sensors/deck-4/strain.parquet")
+df["stress_mpa"] = df["strain"] * 210_000  # steel, E in MPa
+df.describe()</code></pre>
+        <div class="cell-output">
+          <table class="output-table">
+            <thead><tr><th></th><th>strain</th><th>stress_mpa</th><th>temp_c</th></tr></thead>
+            <tbody>
+              <tr><td>mean</td><td>0.00142</td><td>298.2</td><td>23.4</td></tr>
+              <tr><td>std</td><td>0.00031</td><td>65.1</td><td>1.2</td></tr>
+              <tr><td>min</td><td>0.00021</td><td>44.1</td><td>21.0</td></tr>
+              <tr><td>max</td><td>0.00389</td><td>816.9</td><td>26.8</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="cell cell-code cell-error bracketed">
+        <div class="cell-header"><span class="cell-count">[2]</span><span>python</span></div>
+        <pre class="cell-input"><code>threshold = config["yield_mpa"]
+flagged = df[df.stress_mpa > threshold]</code></pre>
+        <pre class="cell-output error-output">NameError                                 Traceback (most recent call last)
+Cell In[2], line 1
+----&gt; 1 threshold = config["yield_mpa"]
+
+NameError: name 'config' is not defined</pre>
+      </div>
+
+      <div class="cell cell-code cell-running bracketed">
+        <div class="cell-header"><span class="cell-count">[*]</span><span>python</span><span class="running-indicator" aria-hidden="true"></span></div>
+        <pre class="cell-input"><code>model = fit_panel_model(df, order=3)</code></pre>
+      </div>
+    </div>
+
+    <div class="inspector bracketed">
+      <div class="inspector-title">Variables</div>
+      <div class="var-row"><span class="var-name">df</span><span class="var-type">DataFrame</span><span class="var-value">48,000 &times; 3</span></div>
+      <div class="var-row"><span class="var-name">threshold</span><span class="var-type">&mdash;</span><span class="var-value">not defined</span></div>
+      <div class="var-row"><span class="var-name">np</span><span class="var-type">module</span><span class="var-value">numpy 2.1</span></div>
+      <div class="var-row"><span class="var-name">model</span><span class="var-type">&mdash;</span><span class="var-value">computing&hellip;</span></div>
+    </div>
+
+    <div class="statusbar">
+      <div class="statusbar-left">3 cells &middot; 2 executed &middot; 1 error</div>
+      <div class="statusbar-right">Star date 2026.256 &middot; 14:32</div>
+    </div>
+  </div>
+
+</body>
+</html>
