@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNotebookStore } from '../notebook/store';
+import { useActiveNotebook } from '../notebook/store';
 
 function dayOfYear(d: Date): number {
   const start = new Date(d.getFullYear(), 0, 0);
@@ -15,7 +15,7 @@ function formatStarDate(d: Date): string {
 }
 
 export function StatusBar() {
-  const notebook = useNotebookStore((s) => s.notebook);
+  const notebook = useActiveNotebook();
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {

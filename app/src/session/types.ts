@@ -50,14 +50,49 @@ export interface ExecuteHandle {
   cancel(): void;
 }
 
+export interface CompletionItem {
+  label: string;
+  /** Jupyter's experimental type hint when present: 'function', 'module', 'keyword', ... */
+  type?: string;
+}
+
+export interface CompletionResult {
+  /** Character offsets into the code that the items replace. */
+  cursorStart: number;
+  cursorEnd: number;
+  items: CompletionItem[];
+}
+
+export interface InspectResult {
+  found: boolean;
+  /** mime -> content; text/plain may contain ANSI escapes. */
+  data: Record<string, string>;
+}
+
+export interface SilentResult {
+  status: ExecutionResult;
+  outputs: CellOutput[];
+}
+
 export interface KernelSession {
   readonly path: string;
   readonly status: KernelStatus;
   readonly kernelName: string;
   onStatus(cb: (s: KernelStatus) => void): () => void;
   execute(code: string, handlers: ExecuteHandlers): ExecuteHandle;
+  /** complete_request at a character offset into `code`. */
+  complete(code: string, cursor: number): Promise<CompletionResult>;
+  /** inspect_request; detailLevel 0 is the short docstring, 1 includes source. */
+  inspect(code: string, cursor: number, detailLevel?: 0 | 1): Promise<InspectResult>;
+  /**
+   * Runs code with silent=true, store_history=false. Does not bump the
+   * execution counter or appear in In/Out. Streams still arrive as outputs.
+   */
+  executeSilent(code: string): Promise<SilentResult>;
   interrupt(): Promise<void>;
   restart(): Promise<void>;
+  /** Swap the kernel behind this session; status events continue on this object. */
+  changeKernel(kernelName: string): Promise<void>;
   shutdown(): Promise<void>;
 }
 

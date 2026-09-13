@@ -1,7 +1,7 @@
-import { useNotebookStore } from '../notebook/store';
+import { useActiveNotebook } from '../notebook/store';
 import { useSessionStore } from '../session/store';
 import type { KernelStatus } from '../session/types';
-import { ModeDial } from './ModeDial';
+import { ModeMenu } from './ModeMenu';
 
 const STATUS_TONE: Record<KernelStatus, 'success' | 'warning' | 'danger' | 'muted'> = {
   disconnected: 'muted',
@@ -14,7 +14,7 @@ const STATUS_TONE: Record<KernelStatus, 'success' | 'warning' | 'danger' | 'mute
 };
 
 export function TopBar() {
-  const notebookPath = useNotebookStore((s) => s.notebook?.path);
+  const notebookPath = useActiveNotebook()?.path;
   const kernelStatus = useSessionStore((s) => s.kernelStatus);
   const kernelName = useSessionStore((s) => s.kernelName);
 
@@ -24,7 +24,7 @@ export function TopBar() {
     <header className="topbar">
       <span className="topbar-logo">ORBITAL</span>
       <span className="topbar-project">{notebookPath ?? 'no notebook'}</span>
-      <ModeDial />
+      <ModeMenu />
       <span className="kernel-status">
         <i className={`kernel-dot kernel-dot-${tone}`} aria-hidden="true" />
         {kernelName ? `${kernelName} · ${kernelStatus}` : kernelStatus}

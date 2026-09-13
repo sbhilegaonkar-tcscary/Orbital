@@ -16,16 +16,20 @@ import type { Contents, KernelMessage, Session } from '@jupyterlab/services';
 
 import type {
   CellOutput,
+  CompletionItem,
+  CompletionResult,
   ContentsApi,
   ContentsEntry,
   ExecuteHandle,
   ExecuteHandlers,
   ExecutionResult,
+  InspectResult,
   KernelSession,
   KernelSpecInfo,
   KernelStatus,
   ServerConfig,
   SessionProvider,
+  SilentResult,
 } from './types';
 
 /**
@@ -89,6 +93,60 @@ function mapMimeBundle(bundle: Record<string, unknown>): Record<string, string> 
   const out: Record<string, string> = {};
   for (const key of Object.keys(bundle)) out[key] = mimeToString(bundle[key]);
   return out;
+}
+
+/**
+ * Translate one iopub message into a CellOutput, or null for the message
+ * types the notebook does not render (status, execute_input, clear_output).
+ * Shared by execute() and executeSilent() so both produce identical shapes.
+ */
+function iopubToOutput(msg: KernelMessage.IIOPubMessage): CellOutput | null {
+  switch (msg.header.msg_type) {
+    case 'stream': {
+      const content = (msg as KernelMessage.IStreamMsg).content;
+      return {
+        type: 'stream',
+        name: content.name === 'stderr' ? 'stderr' : 'stdout',
+        text: mimeToString(content.text),
+      };
+    }
+    case 'display_data': {
+      const content = (msg as KernelMessage.IDisplayDataMsg).content;
+      return {
+        type: 'display_data',
+        data: mapMimeBundle(content.data as Record<string, unknown>),
+        metadata: (content.metadata ?? {}) as Record<string, unknown>,
+      };
+    }
+    case 'execute_result': {
+      const content = (msg as KernelMessage.IExecuteResultMsg).content;
+      return {
+        type: 'execute_result',
+        data: mapMimeBundle(content.data as Record<string, unknown>),
+        metadata: (content.metadata ?? {}) as Record<string, unknown>,
+        executionCount: content.execution_count ?? undefined,
+      };
+    }
+    case 'error': {
+      const content = (msg as KernelMessage.IErrorMsg).content;
+      return {
+        type: 'error',
+        ename: content.ename,
+        evalue: content.evalue,
+        traceback: content.traceback ?? [],
+      };
+    }
+    // TODO(M6): honour clear_output (wait flag) once the notebook store owns
+    // per-cell output buffers.
+    default:
+      return null;
+  }
+}
+
+function replyStatus(status: 'ok' | 'error' | 'abort' | string): ExecutionResult {
+  if (status === 'ok') return 'ok';
+  if (status === 'error') return 'error';
+  return 'aborted';
 }
 
 /** Handlers come from UI code; a throw there must not break the kernel stream. */
@@ -186,56 +244,8 @@ class JupyterKernelSession implements KernelSession {
     const emit = (out: CellOutput) => guard('onOutput', () => handlers.onOutput(out));
 
     future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-      const type = msg.header.msg_type;
-      switch (type) {
-        case 'stream': {
-          const content = (msg as KernelMessage.IStreamMsg).content;
-          emit({
-            type: 'stream',
-            name: content.name === 'stderr' ? 'stderr' : 'stdout',
-            text: mimeToString(content.text),
-          });
-          break;
-        }
-        case 'display_data': {
-          const content = (msg as KernelMessage.IDisplayDataMsg).content;
-          emit({
-            type: 'display_data',
-            data: mapMimeBundle(content.data as Record<string, unknown>),
-            metadata: (content.metadata ?? {}) as Record<string, unknown>,
-          });
-          break;
-        }
-        case 'execute_result': {
-          const content = (msg as KernelMessage.IExecuteResultMsg).content;
-          emit({
-            type: 'execute_result',
-            data: mapMimeBundle(content.data as Record<string, unknown>),
-            metadata: (content.metadata ?? {}) as Record<string, unknown>,
-            executionCount: content.execution_count ?? undefined,
-          });
-          break;
-        }
-        case 'error': {
-          const content = (msg as KernelMessage.IErrorMsg).content;
-          emit({
-            type: 'error',
-            ename: content.ename,
-            evalue: content.evalue,
-            traceback: content.traceback ?? [],
-          });
-          break;
-        }
-        case 'clear_output':
-          // TODO(M3): honour clear_output (wait flag) once the notebook store
-          // owns per-cell output buffers.
-          break;
-        case 'status':
-        case 'execute_input':
-          break;
-        default:
-          break;
-      }
+      const out = iopubToOutput(msg);
+      if (out) emit(out);
     };
 
     future.done
@@ -244,10 +254,7 @@ class JupyterKernelSession implements KernelSession {
         if (typeof count === 'number' && count >= 0) {
           guard('onExecutionCount', () => handlers.onExecutionCount(count));
         }
-        const status = reply.content.status;
-        if (status === 'ok') finish('ok');
-        else if (status === 'error') finish('error');
-        else finish('aborted');
+        finish(replyStatus(reply.content.status));
       })
       .catch(() => {
         // Disposed before the reply landed, or the connection dropped.
@@ -265,12 +272,83 @@ class JupyterKernelSession implements KernelSession {
     };
   }
 
+  async complete(code: string, cursor: number): Promise<CompletionResult> {
+    const empty: CompletionResult = { cursorStart: cursor, cursorEnd: cursor, items: [] };
+    const kernel = this.session.kernel;
+    if (!kernel) return empty;
+
+    const reply = await kernel.requestComplete({ code, cursor_pos: cursor });
+    const content = reply.content;
+    // 'error'/'abort' replies carry no matches; an empty result is the honest
+    // answer for a completion popup, so this does not throw.
+    if (content.status !== 'ok') return empty;
+
+    const hints = (content.metadata as Record<string, unknown> | undefined)?.[
+      '_jupyter_types_experimental'
+    ];
+    const typed = Array.isArray(hints) ? (hints as { type?: unknown }[]) : [];
+
+    const items: CompletionItem[] = content.matches.map((label, i) => {
+      const type = typed[i]?.type;
+      return typeof type === 'string' && type ? { label, type } : { label };
+    });
+
+    return { cursorStart: content.cursor_start, cursorEnd: content.cursor_end, items };
+  }
+
+  async inspect(code: string, cursor: number, detailLevel: 0 | 1 = 0): Promise<InspectResult> {
+    const kernel = this.session.kernel;
+    if (!kernel) return { found: false, data: {} };
+
+    const reply = await kernel.requestInspect({
+      code,
+      cursor_pos: cursor,
+      detail_level: detailLevel,
+    });
+    const content = reply.content;
+    if (content.status !== 'ok' || !content.found) return { found: false, data: {} };
+
+    return { found: true, data: mapMimeBundle((content.data ?? {}) as Record<string, unknown>) };
+  }
+
+  async executeSilent(code: string): Promise<SilentResult> {
+    const kernel = this.session.kernel;
+    if (!kernel) return { status: 'aborted', outputs: [] };
+
+    const outputs: CellOutput[] = [];
+    const future = kernel.requestExecute({
+      code,
+      silent: true,
+      store_history: false,
+      stop_on_error: false,
+    });
+    future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
+      const out = iopubToOutput(msg);
+      if (out) outputs.push(out);
+    };
+
+    try {
+      const reply = await future.done;
+      return { status: replyStatus(reply.content.status), outputs };
+    } catch {
+      // Disposed before the reply landed, or the connection dropped.
+      return { status: 'aborted', outputs };
+    }
+  }
+
   async interrupt(): Promise<void> {
     await this.session.kernel?.interrupt();
   }
 
   async restart(): Promise<void> {
     await this.session.kernel?.restart();
+  }
+
+  async changeKernel(kernelName: string): Promise<void> {
+    // Status subscriptions hang off `session.statusChanged`, which the session
+    // re-wires to the new kernel, so onStatus() listeners survive this.
+    await this.session.changeKernel({ name: kernelName });
+    await this.session.kernel?.info;
   }
 
   async shutdown(): Promise<void> {

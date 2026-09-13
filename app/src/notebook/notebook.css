@@ -256,3 +256,242 @@
   box-sizing: border-box;
   border-left: 2px solid var(--accent);
 }
+
+/* ---- tabs bar ------------------------------------------------------------ */
+.tabs-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 6px 20px 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px 8px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  position: relative;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tab-active {
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+.tab-active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--accent);
+}
+
+.tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 22ch;
+}
+
+.tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  padding: 0;
+  width: 16px;
+  height: 16px;
+  line-height: 1;
+  border-radius: 3px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.tab-close:hover {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+
+/* ---- notebook toolbar ------------------------------------------------------------ */
+.nb-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.nb-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.nb-toolbar-spacer {
+  flex: 1 1 auto;
+}
+
+.nb-icon-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  color: var(--text-muted);
+}
+
+.nb-icon-btn:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface-2);
+  border-color: var(--border);
+}
+
+.nb-icon-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.nb-icon-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.nb-icon-btn .dirty-dot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  margin-left: 0;
+}
+
+.nb-kernel-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nb-kernel-picker-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.nb-kernel-picker select {
+  font-size: 12px;
+  padding: 5px 8px;
+}
+
+/* ---- per-cell hover toolbar ------------------------------------------------------------ */
+.cell-toolbar {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  z-index: 1;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  opacity: 0;
+  pointer-events: none;
+}
+
+:root:not([data-motion='reduced']) .cell-toolbar {
+  transition: opacity 120ms ease;
+}
+
+.cell:hover .cell-toolbar,
+.cell[data-selected] .cell-toolbar,
+.cell-toolbar-forced {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.cell-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--text-muted);
+}
+
+.cell-toolbar-btn:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.cell-toolbar-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.cell-toolbar-btn-danger:hover:not(:disabled) {
+  color: var(--danger);
+}
+
+.cell-toolbar-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---- collapsed output ------------------------------------------------------------ */
+.cell-output-collapsed {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.cell-output-collapsed:hover {
+  color: var(--text);
+}
+
+/* ---- notebook picker: new-notebook action ------------------------------------------------------------ */
+.notebook-picker-actions {
+  margin-bottom: 16px;
+}
+
+.new-notebook-button {
+  color: var(--accent);
+  border-color: var(--accent);
+}

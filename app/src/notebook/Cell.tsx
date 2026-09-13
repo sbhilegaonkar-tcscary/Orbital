@@ -3,12 +3,16 @@
  * for code cells or MarkdownCell for markdown. Focuses itself when selected
  * (unless a descendant editor already holds focus) so keyboard shortcuts in
  * Notebook.tsx reach the DOM even when nothing was clicked directly.
+ *
+ * `?hovercell=1` (dev aid, for screenshots) forces the hover toolbar visible
+ * on the selected cell instead of requiring an actual mouse hover.
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import type { Cell as CellModel } from './model';
 import { CodeEditor } from './CodeEditor';
 import { Output } from './Output';
 import { MarkdownCell } from './MarkdownCell';
+import { CellToolbar } from './CellToolbar';
 import { useNotebookStore } from './store';
 
 function countLabel(cell: CellModel): string {
@@ -25,7 +29,13 @@ export interface CellProps {
 
 export function Cell({ cell, selected, onSelect }: CellProps) {
   const setSource = useNotebookStore((s) => s.setSource);
+  const toggleCollapse = useNotebookStore((s) => s.toggleCollapse);
   const rootRef = useRef<HTMLElement | null>(null);
+
+  const forceHoverToolbar = useMemo(
+    () => new URLSearchParams(window.location.search).get('hovercell') === '1',
+    [],
+  );
 
   useEffect(() => {
     const root = rootRef.current;
@@ -36,6 +46,7 @@ export function Cell({ cell, selected, onSelect }: CellProps) {
 
   const hasOutputs = cell.outputs.length > 0;
   const hasError = cell.outputs.some((o) => o.type === 'error');
+  const collapsed = cell.metadata.collapsed === true;
 
   return (
     <section
@@ -43,6 +54,7 @@ export function Cell({ cell, selected, onSelect }: CellProps) {
       className="cell"
       data-type={cell.type}
       data-state={cell.state}
+      data-cell-id={cell.id}
       data-selected={selected ? 'true' : undefined}
       tabIndex={-1}
       onMouseDown={onSelect}
@@ -52,10 +64,13 @@ export function Cell({ cell, selected, onSelect }: CellProps) {
         {cell.type === 'code' && hasOutputs && <span className="cell-io-label">{hasError ? 'err' : 'out'}</span>}
       </div>
       <div className="cell-body">
+        <CellToolbar cell={cell} forceVisible={forceHoverToolbar && selected} />
         {cell.type === 'code' ? (
           <>
             <CodeEditor value={cell.source} onChange={(src) => setSource(cell.id, src)} />
-            {hasOutputs && <Output outputs={cell.outputs} />}
+            {hasOutputs && (
+              <Output outputs={cell.outputs} collapsed={collapsed} onToggleCollapse={() => toggleCollapse(cell.id)} />
+            )}
           </>
         ) : (
           <MarkdownCell cell={cell} />

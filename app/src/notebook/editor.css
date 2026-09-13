@@ -1,0 +1,62 @@
+/*
+ * Completion popup and hover/inspect tooltips for code cells. Tokens only,
+ * per docs/DESIGN.md — no hardcoded colors, derived shades via color-mix().
+ * Rendered with `tooltips({ parent: document.body })` (see CodeEditor.tsx)
+ * so they escape the notebook's own scroll container.
+ */
+
+.cm-tooltip {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: 400 12px/1.4 var(--font-ui);
+  box-shadow: var(--glow);
+}
+
+.cm-tooltip.cm-tooltip-hover {
+  max-width: 480px;
+  padding: 8px 10px;
+  font: 400 12px/1.4 var(--font-mono);
+}
+
+.cm-kernel-tooltip-text {
+  color: var(--text);
+}
+
+.cm-tooltip-autocomplete {
+  padding: 2px;
+}
+
+.cm-tooltip-autocomplete > ul {
+  font: 400 12.5px/1.5 var(--font-mono);
+  max-height: 16em;
+}
+
+.cm-tooltip-autocomplete > ul > li {
+  border-radius: calc(var(--radius) - 2px);
+  padding: 3px 8px;
+  color: var(--text);
+}
+
+.cm-tooltip-autocomplete > ul > li[aria-selected] {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--text);
+  box-shadow: var(--glow);
+}
+
+.cm-completionLabel {
+  color: var(--text);
+}
+
+.cm-completionMatchedText {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.cm-completionDetail {
+  margin-left: 8px;
+  color: var(--text-muted);
+  font-style: normal;
+}

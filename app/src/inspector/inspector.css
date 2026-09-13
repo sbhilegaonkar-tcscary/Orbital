@@ -1,0 +1,132 @@
+/*
+ * Variable inspector rows. Tokens only per docs/DESIGN.md. `.inspector`,
+ * `.inspector-title` and `.inspector-empty` are themed in theme/base.css and
+ * theme/modes.css (mode chrome + skins apply through those class names) —
+ * this file only adds the header controls and row grid beneath them.
+ */
+
+.inspector-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.inspector-header .inspector-title {
+  margin: 0 0 12px;
+}
+
+.inspector-count {
+  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.inspector-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.inspector-refresh:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.inspector-refresh:focus-visible {
+  outline: none;
+  box-shadow: var(--glow);
+}
+
+.inspector-refresh:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.inspector-filter {
+  box-sizing: border-box;
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text);
+  font: 400 12px/1.4 var(--font-ui);
+}
+
+.inspector-filter::placeholder {
+  color: var(--text-muted);
+}
+
+.inspector-filter:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--glow);
+}
+
+.inspector-error {
+  margin: 0 0 10px;
+  font-size: 11.5px;
+  color: var(--danger);
+}
+
+.inspector-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.inspector-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.inspector-row:last-child {
+  border-bottom: none;
+}
+
+.inspector-name {
+  overflow: hidden;
+  font: 500 12px/1.3 var(--font-mono);
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-type {
+  overflow: hidden;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inspector-type[data-tinted] {
+  color: var(--accent-2);
+}
+
+.inspector-module {
+  margin-left: 6px;
+  color: var(--accent);
+}
+
+.inspector-value {
+  font: 400 12px/1.3 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  text-align: right;
+  white-space: nowrap;
+}

@@ -5,12 +5,17 @@
  */
 import { useEffect, useRef } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { EditorState } from '@codemirror/state';
-import { EditorView, keymap } from '@codemirror/view';
+import { EditorState, Prec } from '@codemirror/state';
+import { EditorView, keymap, tooltips } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { HighlightStyle, syntaxHighlighting, indentOnInput } from '@codemirror/language';
+import { closeBrackets, closeBracketsKeymap, startCompletion } from '@codemirror/autocomplete';
+import { search, searchKeymap } from '@codemirror/search';
 import { python } from '@codemirror/lang-python';
 import { tags } from '@lezer/highlight';
+import { kernelCompletion } from './completion';
+import { inspectKeymap, inspectTooltipField, kernelHoverTooltip } from './hover';
+import './editor.css';
 
 export interface CodeEditorProps {
   value: string;
@@ -48,6 +53,22 @@ const editorTheme = EditorView.theme({
   '.cm-activeLine': { backgroundColor: 'transparent' },
 });
 
+/**
+ * Tab completes the token before the cursor (Jupyter habit) when there is
+ * one; otherwise it falls through (returns false) so `indentWithTab` in the
+ * default keymap runs instead — at line start or right after whitespace,
+ * that means indent.
+ */
+function tabCompleteOrIndent(view: EditorView): boolean {
+  const { state } = view;
+  const { from, head } = state.selection.main;
+  if (from !== head) return false;
+  const line = state.doc.lineAt(head);
+  const before = line.text.slice(0, head - line.from);
+  if (!/[A-Za-z0-9_]$/.test(before)) return false;
+  return startCompletion(view);
+}
+
 export function CodeEditor({ value, onChange, language = 'python', onKeyDown, autoFocus }: CodeEditorProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -58,7 +79,14 @@ export function CodeEditor({ value, onChange, language = 'python', onKeyDown, au
     if (!hostRef.current) return;
     const extensions = [
       history(),
-      keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+      Prec.highest(keymap.of([{ key: 'Tab', run: tabCompleteOrIndent }, ...inspectKeymap])),
+      keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
+      closeBrackets(),
+      search(),
+      tooltips({ parent: document.body }),
+      kernelCompletion,
+      kernelHoverTooltip,
+      inspectTooltipField,
       syntaxHighlighting(highlightStyle),
       editorTheme,
       indentOnInput(),

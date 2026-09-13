@@ -150,6 +150,73 @@ export interface SessionProvider {
 Stream outputs with the same `name` arriving consecutively are merged by the
 notebook store, not by the provider.
 
+M5 added to `KernelSession`: `complete`, `inspect`, `executeSilent`, and
+`changeKernel`. See `session/types.ts` for the exact shapes; that file is
+authoritative.
+
+## Notebook store (M5 shape: many open documents)
+
+`notebook/store.ts` holds every open notebook, keyed by path. Kernel sessions
+live in a module-level `Map<path, KernelSession>` beside the store, never in
+state. The session store's `kernelStatus` mirrors the **active** document's
+session; activating another tab re-pushes that session's status.
+
+```ts
+export interface NotebookState {
+  docs: Record<string, NotebookModel>;
+  dirty: Record<string, boolean>;
+  openPaths: string[];                 // tab order
+  activePath: string | null;
+  selectedCellId: string | null;       // within the active doc
+  loading: boolean;
+  error: string | null;
+  clipboard: Cell[] | null;
+  lastDeleted: { path: string; index: number; cell: Cell } | null;
+  kernelSpecs: KernelSpecInfo[];
+
+  // documents
+  open(path: string): Promise<void>;        // opens or activates
+  activate(path: string): void;
+  close(path?: string): Promise<void>;      // default: active; shuts its kernel down
+  save(path?: string): Promise<void>;
+  saveAll(): Promise<void>;
+
+  // execution (active doc)
+  runCell(id: string): Promise<void>;
+  runAndAdvance(id: string): Promise<void>;
+  runAll(): Promise<void>;
+  runAbove(id: string): Promise<void>;      // cells before id, exclusive
+  runBelow(id: string): Promise<void>;      // id and after
+  interrupt(): Promise<void>;
+  restartKernel(): Promise<void>;
+  restartAndRunAll(): Promise<void>;
+  changeKernel(kernelName: string): Promise<void>;
+  refreshKernelSpecs(): Promise<void>;
+
+  // editing (active doc)
+  setSource(id: string, source: string): void;
+  insertCell(afterId: string | null, type: Cell['type'], source?: string): string;
+  deleteCell(id: string): void;             // records lastDeleted
+  undoDelete(): void;
+  moveCell(id: string, direction: -1 | 1): void;
+  setCellType(id: string, type: Cell['type']): void;
+  select(id: string | null): void;
+  cutCells(ids: string[]): void;
+  copyCells(ids: string[]): void;
+  pasteCells(afterId: string | null): void;
+  mergeWithBelow(id: string): void;
+  splitCell(id: string, offset: number): void;
+  clearOutputs(id?: string): void;          // default: all cells
+  toggleCollapse(id: string);               // metadata.collapsed, nbformat convention
+}
+
+export function useActiveNotebook(): NotebookModel | null;
+export function getActiveSession(): KernelSession | null;   // for the editor's completion/hover
+export function onExecutionSettled(cb: (path: string) => void): () => void;  // inspector refresh hook
+```
+
+Consumers never read `docs[activePath]` by hand; they use `useActiveNotebook()`.
+
 ## Notebook model (`notebook/model.ts`)
 
 ```ts

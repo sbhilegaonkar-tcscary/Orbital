@@ -2,6 +2,9 @@
  * Renders a cell's CellOutput[]: stream text, execute_result/display_data by
  * mime preference (html > png > svg > plain text), and errors as a
  * traceback with ANSI stripped and the failing frame highlighted.
+ *
+ * When `collapsed` (nbformat's `cell.metadata.collapsed`), renders a single
+ * muted summary bar instead; clicking it expands via `onToggleCollapse`.
  */
 import DOMPurify from 'dompurify';
 import type { CellOutput } from '../session/types';
@@ -61,8 +64,37 @@ function renderTraceback(traceback: string[], key: string) {
   );
 }
 
-export function Output({ outputs }: { outputs: CellOutput[] }) {
+export interface OutputProps {
+  outputs: CellOutput[];
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
+}
+
+export function Output({ outputs, collapsed, onToggleCollapse }: OutputProps) {
   if (outputs.length === 0) return null;
+
+  if (collapsed) {
+    const n = outputs.length;
+    return (
+      <div
+        className="cell-output cell-output-collapsed"
+        role="button"
+        tabIndex={0}
+        onClick={onToggleCollapse}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onToggleCollapse?.();
+          }
+        }}
+      >
+        <span className="cell-output-collapsed-label">
+          ⋯ {n} output{n === 1 ? '' : 's'} hidden
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div className="cell-output">
       {outputs.map((out, i) => {

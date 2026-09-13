@@ -168,6 +168,62 @@ describeLive('JupyterSessionProvider (live server)', () => {
     expect(result.status).toBe('error');
   });
 
+  it('completes a partial import with numpy', async () => {
+    expect(session).not.toBeNull();
+    const code = 'import nump';
+    const result = await session!.complete(code, code.length);
+
+    expect(result.items.map((i) => i.label)).toContain('numpy');
+    expect(result.cursorStart).toBeLessThanOrEqual(result.cursorEnd);
+    expect(result.cursorEnd).toBe(code.length);
+  });
+
+  it('returns an empty completion rather than throwing on a hopeless prefix', async () => {
+    expect(session).not.toBeNull();
+    const code = 'zzzz_not_a_name_';
+    const result = await session!.complete(code, code.length);
+    expect(Array.isArray(result.items)).toBe(true);
+  });
+
+  it('inspects a builtin and returns text/plain documentation', async () => {
+    expect(session).not.toBeNull();
+    const result = await session!.inspect('len', 3);
+
+    expect(result.found).toBe(true);
+    expect(typeof result.data['text/plain']).toBe('string');
+    expect(result.data['text/plain']).toContain('len');
+  });
+
+  it('executeSilent streams output without advancing the execution counter', async () => {
+    expect(session).not.toBeNull();
+    const before = await run(session!, '1');
+    const silent = await session!.executeSilent('print(7)');
+    const after = await run(session!, '1');
+
+    expect(silent.status).toBe('ok');
+    const stream = silent.outputs.find((o) => o.type === 'stream');
+    expect(stream).toBeDefined();
+    expect(stream && stream.type === 'stream' ? stream.text : '').toContain('7');
+
+    // store_history=false, so the counter moves by exactly one visible run.
+    expect(after.counts[0]).toBe(before.counts[0] + 1);
+  });
+
+  it('keeps onStatus firing across changeKernel', async () => {
+    expect(session).not.toBeNull();
+    const seen: string[] = [];
+    const off = session!.onStatus((s) => seen.push(s));
+
+    await session!.changeKernel('python3');
+    const result = await run(session!, '1+1');
+    off();
+
+    expect(result.status).toBe('ok');
+    expect(session!.kernelName).toBe('python3');
+    expect(seen).toContain('busy');
+    expect(seen).toContain('idle');
+  });
+
   it('reuses the existing session for the same path', async () => {
     expect(session).not.toBeNull();
     const again = await provider.openNotebookSession(NOTEBOOK);
