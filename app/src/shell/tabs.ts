@@ -28,6 +28,7 @@
 import { create } from 'zustand';
 import { useNotebookStore } from '../notebook/store';
 import { useFilesStore } from '../files/store';
+import { useUiStore } from './uiStore';
 
 export interface TabRef {
   kind: 'notebook' | 'file';
@@ -118,6 +119,22 @@ export const useTabsStore = create<TabsState>((set, get) => ({
     }));
   },
 }));
+
+// ---- an activated tab always brings the editor area into view ------------
+// Opening a file from the Home page (or from Settings) creates a tab, but the
+// rail's view selection is independent state; without this the tab exists
+// and nothing visible changes.
+
+let prevActiveTab: TabRef | null = null;
+
+useTabsStore.subscribe((state) => {
+  const tab = state.activeTab;
+  const changed = tab !== prevActiveTab && (!tab || !prevActiveTab || !sameTab(tab, prevActiveTab));
+  prevActiveTab = tab;
+  if (tab && changed && useUiStore.getState().view !== 'notebook') {
+    useUiStore.getState().setView('notebook');
+  }
+});
 
 // ---- mirror notebook/store.ts's openPaths/activePath into this store ------
 
