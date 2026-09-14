@@ -1,24 +1,21 @@
 /**
- * Notebook store tests. No live server: a fake SessionProvider is injected
- * through `setProviderFactory`, and its fake KernelSession echoes the code
- * back as a stdout stream while bumping its own execution counter.
+ * Notebook store tests. No live server: a fake SessionProvider from
+ * `session/testing.ts` is injected through `setProviderFactory`, and its fake
+ * KernelSession echoes the code back as a stdout stream while bumping its own
+ * execution counter. Tests that need other iopub shapes set `session.script`.
  */
 import { beforeEach, afterEach, describe, expect, it } from 'vitest';
 
 import { setProviderFactory, useSessionStore } from '../session/store';
-import type {
-  CompletionResult,
-  ContentsApi,
-  ContentsEntry,
-  ExecuteHandle,
-  ExecuteHandlers,
-  InspectResult,
-  KernelSession,
-  KernelSpecInfo,
-  KernelStatus,
-  SessionProvider,
-  SilentResult,
-} from '../session/types';
+import {
+  FakeSession,
+  makeFakeContents,
+  makeFakeProvider,
+  makeFakeSession,
+  makeGate,
+} from '../session/testing';
+import type { ExecuteScript } from '../session/testing';
+import type { CellOutput, SessionProvider } from '../session/types';
 import { useNotebookStore, getActiveSession, onExecutionSettled } from './store';
 import type { NotebookModel } from './model';
 
@@ -60,107 +57,29 @@ function tick(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-class FakeSession implements KernelSession {
-  status: KernelStatus = 'idle';
-  kernelName: string;
-  shutdownCalls = 0;
-  restartCalls = 0;
-  interruptCalls = 0;
-  changedTo: string[] = [];
-  /** Order in which this session actually started executing code. */
-  executed: string[] = [];
-  private count = 0;
-  private listeners = new Set<(s: KernelStatus) => void>();
-
-  constructor(
-    readonly path: string,
-    kernelName: string,
-    private readonly fake: { hold: boolean; pending: (() => void)[] },
-  ) {
-    this.kernelName = kernelName;
-  }
-
-  emit(status: KernelStatus): void {
-    this.status = status;
-    for (const cb of this.listeners) cb(status);
-  }
-
-  onStatus(cb: (s: KernelStatus) => void): () => void {
-    this.listeners.add(cb);
-    return () => this.listeners.delete(cb);
-  }
-
-  execute(code: string, handlers: ExecuteHandlers): ExecuteHandle {
-    const finish = () => {
-      this.executed.push(code);
-      this.count += 1;
-      handlers.onOutput({ type: 'stream', name: 'stdout', text: code });
-      handlers.onExecutionCount(this.count);
-      handlers.onDone('ok');
-    };
-    if (this.fake.hold) this.fake.pending.push(finish);
-    else finish();
-    return { done: Promise.resolve(), cancel: () => undefined };
-  }
-
-  complete(_code: string, cursor: number): Promise<CompletionResult> {
-    return Promise.resolve({ cursorStart: cursor, cursorEnd: cursor, items: [] });
-  }
-
-  inspect(): Promise<InspectResult> {
-    return Promise.resolve({ found: false, data: {} });
-  }
-
-  executeSilent(): Promise<SilentResult> {
-    return Promise.resolve({ status: 'ok', outputs: [] });
-  }
-
-  async interrupt(): Promise<void> {
-    this.interruptCalls += 1;
-  }
-
-  async restart(): Promise<void> {
-    this.restartCalls += 1;
-  }
-
-  async changeKernel(kernelName: string): Promise<void> {
-    this.changedTo.push(kernelName);
-    this.kernelName = kernelName;
-  }
-
-  async shutdown(): Promise<void> {
-    this.shutdownCalls += 1;
-  }
-}
-
 function makeFake(): Fake {
   const sessions = new Map<string, FakeSession>();
   const saved = new Map<string, unknown>();
-  const gate = { hold: false, pending: [] as (() => void)[] };
+  const gate = makeGate();
 
-  const contents: ContentsApi = {
-    list: async (): Promise<ContentsEntry[]> => [],
-    getNotebook: async (path: string) => rawNotebook(path === A ? 'a' : 'b', 3),
-    saveNotebook: async (path: string, nb: unknown) => {
-      saved.set(path, nb);
-    },
-    createNotebook: async () => A,
-  };
-
-  const provider: SessionProvider = {
-    connect: async () => undefined,
-    disconnect: async () => undefined,
-    listKernelSpecs: async (): Promise<KernelSpecInfo[]> => [
+  const provider = makeFakeProvider({
+    listKernelSpecs: async () => [
       { name: 'python3', displayName: 'Python 3', language: 'python' },
       { name: 'ir', displayName: 'R', language: 'R' },
     ],
     openNotebookSession: async (path: string, kernelName?: string) => {
-      const session = new FakeSession(path, kernelName ?? 'python3', gate);
+      const session = makeFakeSession(path, kernelName ?? 'python3', gate);
       sessions.set(path, session);
       return session;
     },
-    contents,
-  };
+    contents: makeFakeContents({
+      getNotebook: async (path: string) => rawNotebook(path === A ? 'a' : 'b', 3),
+      saveNotebook: async (path: string, nb: unknown) => {
+        saved.set(path, nb);
+      },
+      createNotebook: async () => A,
+    }),
+  });
 
   return {
     provider,
@@ -175,10 +94,7 @@ function makeFake(): Fake {
     get pendingCount() {
       return gate.pending.length;
     },
-    release: () => {
-      const pending = gate.pending.splice(0);
-      for (const run of pending) run();
-    },
+    release: () => gate.release(),
   };
 }
 
@@ -397,6 +313,93 @@ describe('execution', () => {
     useNotebookStore.getState().clearOutputs();
     expect(doc(A).cells.every((c) => c.outputs.length === 0)).toBe(true);
     expect(doc(A).cells.every((c) => c.executionCount === null)).toBe(true);
+  });
+
+  it('clear_output(wait=False) empties the cell straight away', async () => {
+    await useNotebookStore.getState().open(A);
+    fake.sessions.get(A)!.script = (_code, h) => {
+      h.onOutput({ type: 'stream', name: 'stdout', text: 'gone\n' });
+      h.onClearOutput?.(false);
+      h.onDone('ok');
+    };
+
+    await useNotebookStore.getState().runCell('a0');
+    expect(doc(A).cells[0].outputs).toEqual([]);
+    expect(doc(A).cells[0].state).toBe('ok');
+  });
+
+  it('clear_output(wait=True) defers the clear to the next output', async () => {
+    await useNotebookStore.getState().open(A);
+    let midflight: CellOutput[] = [];
+    fake.sessions.get(A)!.script = (_code, h) => {
+      h.onOutput({ type: 'stream', name: 'stdout', text: 'a\n' });
+      h.onClearOutput?.(true);
+      // The old output is still on screen: that is the point of wait=True.
+      midflight = doc(A).cells[0].outputs;
+      h.onOutput({ type: 'stream', name: 'stdout', text: 'b\n' });
+      h.onDone('ok');
+    };
+
+    await useNotebookStore.getState().runCell('a0');
+    expect(midflight).toEqual([{ type: 'stream', name: 'stdout', text: 'a\n' }]);
+    // Replaced, not merged with the earlier stdout chunk.
+    expect(doc(A).cells[0].outputs).toEqual([{ type: 'stream', name: 'stdout', text: 'b\n' }]);
+  });
+
+  it('a pending wait-clear does not leak into the next run', async () => {
+    await useNotebookStore.getState().open(A);
+    const session = fake.sessions.get(A)!;
+    session.script = (_code, h) => {
+      h.onOutput({ type: 'stream', name: 'stdout', text: 'a\n' });
+      h.onClearOutput?.(true);
+      h.onDone('ok');
+    };
+    await useNotebookStore.getState().runCell('a0');
+    expect(doc(A).cells[0].outputs).toEqual([{ type: 'stream', name: 'stdout', text: 'a\n' }]);
+
+    session.script = null;
+    await useNotebookStore.getState().runCell('a0');
+    expect(doc(A).cells[0].outputs).toEqual([{ type: 'stream', name: 'stdout', text: 'a0' }]);
+  });
+
+  it('update_display_data replaces matching outputs in every open doc', async () => {
+    const shown: CellOutput = {
+      type: 'display_data',
+      data: { 'text/plain': 'x' },
+      metadata: {},
+      displayId: 'd1',
+    };
+    const show: ExecuteScript = (_code, h) => {
+      h.onOutput(shown);
+      h.onDone('ok');
+    };
+
+    await useNotebookStore.getState().open(A);
+    fake.sessions.get(A)!.script = show;
+    await useNotebookStore.getState().runCell('a0');
+
+    await useNotebookStore.getState().open(B);
+    const sessionB = fake.sessions.get(B)!;
+    sessionB.script = show;
+    await useNotebookStore.getState().runCell('b0');
+
+    // The update arrives on B's kernel but must reach A's copy of the display.
+    sessionB.script = (_code, h) => {
+      h.onUpdateDisplay?.('d1', { 'text/plain': 'y' }, { orbital: 1 });
+      h.onDone('ok');
+    };
+    await useNotebookStore.getState().runCell('b1');
+
+    const updated = {
+      type: 'display_data',
+      data: { 'text/plain': 'y' },
+      metadata: { orbital: 1 },
+      displayId: 'd1',
+    };
+    expect(doc(A).cells[0].outputs).toEqual([updated]);
+    expect(doc(B).cells[0].outputs).toEqual([updated]);
+    // The cell that ran only produced the update, not a new output.
+    expect(doc(B).cells[1].outputs).toEqual([]);
   });
 });
 

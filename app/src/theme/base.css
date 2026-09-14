@@ -89,22 +89,220 @@ a {
 /* ---- app shell grid ------------------------------------------------------ */
 :root {
   --rail-w: 96px;
-  --inspector-w: 280px;
   --topbar-h: 52px;
   --statusbar-h: 28px;
+  /* Dock track sizes are computed in AppShell.tsx from the layout store
+     (docs/ARCHITECTURE.md "Layout (M6)") and written here as inline styles;
+     these are just safe zero-width fallbacks for the first paint. */
+  --left-dock-w: 0px;
+  --left-resizer-w: 0px;
+  --right-dock-w: 0px;
+  --right-resizer-w: 0px;
 }
 
 .app-shell {
   position: relative;
+  /* dvh with a vh fallback: the fallback applies on browsers without dvh
+     support, dvh overrides it everywhere else. */
   height: 100vh;
+  height: 100dvh;
   width: 100vw;
   display: grid;
-  grid-template-columns: var(--rail-w) 1fr var(--inspector-w);
+  grid-template-columns:
+    var(--rail-w) var(--left-dock-w) var(--left-resizer-w) 1fr var(--right-resizer-w)
+    var(--right-dock-w);
   grid-template-rows: var(--topbar-h) 1fr var(--statusbar-h);
   grid-template-areas:
-    'topbar topbar topbar'
-    'rail view inspector'
-    'statusbar statusbar statusbar';
+    'topbar topbar topbar topbar topbar topbar'
+    'rail leftdock leftresizer center rightresizer rightdock'
+    'statusbar statusbar statusbar statusbar statusbar statusbar';
+  overflow: hidden;
+}
+
+.app-shell > * {
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ---- docks and panels (M6) ------------------------------------------------- */
+.dock-area-left {
+  grid-area: leftdock;
+  overflow: hidden;
+}
+
+.dock-resizer-slot-left {
+  grid-area: leftresizer;
+}
+
+.center-column {
+  grid-area: center;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dock-resizer-slot-right {
+  grid-area: rightresizer;
+}
+
+.dock-area-right {
+  grid-area: rightdock;
+  overflow: hidden;
+}
+
+.dock-area-bottom {
+  flex: 0 0 auto;
+  overflow: hidden;
+}
+
+.dock {
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+
+.dock-left {
+  border-right: 1px solid var(--border);
+}
+
+.dock-right {
+  border-left: 1px solid var(--border);
+}
+
+.dock-bottom {
+  border-top: 1px solid var(--border);
+}
+
+.dock-slot {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.panel-frame {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.panel-frame-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font: 600 10.5px/1 var(--font-display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.panel-frame-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.panel-frame-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 3px 6px;
+  line-height: 1;
+  color: var(--text-muted);
+}
+
+.panel-frame-btn:hover {
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.panel-frame-btn-close {
+  font-size: 13px;
+}
+
+.panel-frame-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.panel-placeholder {
+  padding: 18px;
+  font-size: 12px;
+}
+
+.resizer {
+  flex: 0 0 auto;
+  position: relative;
+  background: transparent;
+  touch-action: none;
+}
+
+.resizer:hover,
+.resizer:active {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.resizer-vertical {
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+}
+
+.resizer-horizontal {
+  width: 100%;
+  height: 6px;
+  cursor: row-resize;
+}
+
+/* Below the 900px breakpoint, side docks overlay the view instead of taking
+   grid columns, so the center never shrinks to make room for them. */
+.dock-overlay-layer {
+  position: fixed;
+  top: var(--topbar-h);
+  bottom: var(--statusbar-h);
+  left: var(--rail-w);
+  right: 0;
+  z-index: 10;
+}
+
+.dock-scrim {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+}
+
+.dock-overlay {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--bg) 60%, transparent);
+}
+
+.dock-overlay-left {
+  left: 0;
+}
+
+.dock-overlay-right {
+  right: 0;
 }
 
 /* ---- topbar --------------------------------------------------------------- */
@@ -448,9 +646,11 @@ a {
 
 /* ---- view container --------------------------------------------------------- */
 .view-container {
-  grid-area: view;
+  flex: 1 1 auto;
   position: relative;
   z-index: 1;
+  min-width: 0;
+  min-height: 0;
   overflow: auto;
 }
 
@@ -485,15 +685,14 @@ a {
   margin-top: 4px;
 }
 
-/* ---- inspector ---------------------------------------------------------------- */
+/* ---- inspector ------------------------------------------------------------------ */
+/* Nested inside a PanelFrame's body (shell/Dock.tsx); the frame supplies the
+   panel's own surface/border chrome, so this stays unstyled background. */
 .inspector {
-  grid-area: inspector;
-  position: relative;
-  z-index: 1;
-  padding: 18px 18px 0;
+  height: 100%;
+  min-height: 0;
+  padding: 14px 14px 0;
   overflow-y: auto;
-  background: var(--surface);
-  border-left: 1px solid var(--border);
 }
 
 .inspector-title {

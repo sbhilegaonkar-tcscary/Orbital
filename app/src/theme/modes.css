@@ -3,7 +3,6 @@
 /* ---- cockpit: dense HUD ---------------------------------------------------- */
 [data-mode='cockpit'] {
   --rail-w: 76px;
-  --inspector-w: 260px;
   --topbar-h: 44px;
   --statusbar-h: 24px;
 }

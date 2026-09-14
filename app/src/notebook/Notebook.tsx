@@ -1,65 +1,171 @@
 /**
- * Renders the currently open notebook from useNotebookStore and owns all
- * keyboard handling: run shortcuts always work; single-letter command-mode
- * shortcuts (a/b/dd/m/y/arrows) only fire when focus is not inside an editor.
+ * Renders the currently open notebook from useNotebookStore. Keyboard
+ * handling is split in two: `resolveKey` (pure, exported for
+ * keyboard.test.ts) decides *which* docs/KEYBOARD.md action a keydown maps
+ * to, given the mode ('edit' when focus is inside a `.cm-editor`, 'command'
+ * otherwise) and the raw event; `handleKeyDown` below is the impure
+ * interpreter that turns that action into store calls / editorRegistry
+ * calls. Single-letter command-mode shortcuts only ever fire when the
+ * actual DOM target is the cell's own `.cell` section (never body, an
+ * input, or inside an editor) — see docs/KEYBOARD.md "The two modes".
  */
 import { useRef } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
-import type { Cell as CellModel } from './model';
 import { useNotebookStore, useActiveNotebook } from './store';
 import { Cell } from './Cell';
+import { editorRegistry, toggleLineNumbers } from './editorRegistry';
+import { useAutosaveStatus } from './autosave';
+import { ShortcutsHelp } from '../shell/ShortcutsHelp';
+import { openShortcutsHelp, closeShortcutsHelp, useShortcutsHelpOpen } from '../shell/shortcuts';
 import './notebook.css';
 
 const DELETE_CHORD_MS = 500;
 
-function isEditingTarget(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && !!target.closest('.cm-editor');
+export type CellMode = 'edit' | 'command';
+
+export type NotebookAction =
+  | { type: 'runAndAdvance' }
+  | { type: 'runStay' }
+  | { type: 'runInsertBelow' }
+  | { type: 'runAbove' }
+  | { type: 'runBelow' }
+  | { type: 'splitAtCursor' }
+  | { type: 'leaveEditMode' }
+  | { type: 'enterEditMode' }
+  | { type: 'insertAbove' }
+  | { type: 'insertBelow' }
+  | { type: 'deleteSelected' }
+  | { type: 'setMarkdown' }
+  | { type: 'setCode' }
+  | { type: 'cut' }
+  | { type: 'copy' }
+  | { type: 'paste' }
+  | { type: 'undoDelete' }
+  | { type: 'mergeBelow' }
+  | { type: 'toggleOutputCollapse' }
+  | { type: 'toggleOutputCollapseAll' }
+  | { type: 'toggleLineNumbers' }
+  | { type: 'openHelp' }
+  | { type: 'selectPrev' }
+  | { type: 'selectNext' };
+
+/** Minimal shape `resolveKey` needs — a plain object is enough for tests. */
+export interface KeyLike {
+  key: string;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
+  target: EventTarget | null;
+  /** Mirrors `e.nativeEvent.defaultPrevented`: true once CodeMirror has
+   * already consumed this Escape (closing a popup), per docs/KEYBOARD.md. */
+  defaultPrevented?: boolean;
+}
+
+export interface ChordState {
+  now: number;
+  lastDeleteAt: number;
+}
+
+export interface ResolvedKey {
+  action: NotebookAction | null;
+  lastDeleteAt: number;
 }
 
 /**
- * Focuses the CodeMirror content element of the given cell, if it has one
- * (code cells only — markdown cells render no editor until double-clicked;
- * `MarkdownCell.tsx` is not owned by this change, so command-mode Enter is a
- * no-op there, a known deviation).
+ * Duck-typed rather than `instanceof HTMLElement` so `resolveKey` stays
+ * callable with a plain event-like object in keyboard.test.ts (that test
+ * runs under vitest's node environment, with no DOM globals at all).
  */
-function focusCellEditor(id: string | null): void {
-  if (!id) return;
-  const cellEl = document.querySelector(`.cell[data-cell-id="${CSS.escape(id)}"]`);
-  const content = cellEl?.querySelector('.cm-content');
-  if (content instanceof HTMLElement) content.focus();
+function isCellTarget(target: EventTarget | null): boolean {
+  if (!target || typeof target !== 'object') return false;
+  const classList = (target as { classList?: { contains(cls: string): boolean } }).classList;
+  return !!classList?.contains('cell');
 }
 
 /**
- * `CodeEditor.tsx` exposes no cursor-offset hook yet (owned by a concurrent
- * change), so the split point is derived from the DOM selection instead: the
- * end of the CodeMirror line (`.cm-line`) that currently holds the caret,
- * counted against `cell.source.split('\n')`. This is coarser than a true
- * character offset (it ignores where in the line the caret sits) but matches
- * the documented fallback behaviour.
+ * Pure: given a keydown-like event, the current mode, and the D-D chord
+ * timer, returns the docs/KEYBOARD.md action it maps to (or null) plus the
+ * chord timer's next value. No store access, no DOM writes — safe to unit
+ * test directly (see keyboard.test.ts).
  */
-function splitOffsetFromSelection(cell: CellModel, target: EventTarget | null): number | null {
-  if (!(target instanceof HTMLElement)) return null;
-  const editorRoot = target.closest('.cm-editor');
-  if (!editorRoot) return null;
+export function resolveKey(e: KeyLike, mode: CellMode, chord: ChordState): ResolvedKey {
+  const mod = e.ctrlKey || e.metaKey;
+  const none: ResolvedKey = { action: null, lastDeleteAt: chord.lastDeleteAt };
+  const act = (type: NotebookAction['type']): ResolvedKey => ({
+    action: { type } as NotebookAction,
+    lastDeleteAt: chord.lastDeleteAt,
+  });
 
-  const selection = window.getSelection();
-  const anchor = selection?.anchorNode ?? null;
-  const anchorEl = anchor instanceof Element ? anchor : (anchor?.parentElement ?? null);
-  const lineEl = anchorEl?.closest('.cm-line');
-  const content = editorRoot.querySelector('.cm-content');
-  if (!lineEl || !content) return null;
+  // Running: both modes, per docs/KEYBOARD.md "Running".
+  if (e.key === 'Enter' && e.shiftKey) return act('runAndAdvance');
+  if (e.key === 'Enter' && e.altKey) return act('runInsertBelow');
+  if (e.key === 'Enter' && mod) return act('runStay');
+  if (mod && e.shiftKey && e.key.toLowerCase() === 'a') return act('runAbove');
+  if (mod && e.shiftKey && e.key.toLowerCase() === 'b') return act('runBelow');
 
-  const lines = Array.from(content.querySelectorAll('.cm-line'));
-  const lineIndex = lines.indexOf(lineEl);
-  if (lineIndex === -1) return null;
-
-  const sourceLines = cell.source.split('\n');
-  let offset = 0;
-  for (let i = 0; i <= lineIndex && i < sourceLines.length; i += 1) {
-    offset += sourceLines[i].length;
-    if (i < lineIndex) offset += 1; // the '\n' the split rejoins on
+  // Split at cursor: edit mode only.
+  if (mod && e.shiftKey && (e.key === '_' || e.key === '-') && mode === 'edit') {
+    return act('splitAtCursor');
   }
-  return offset;
+
+  // Esc, edit mode only: CodeMirror gets first refusal (closing a popup);
+  // only when it did *not* handle the key do we leave edit mode.
+  if (e.key === 'Escape' && mode === 'edit') {
+    if (e.defaultPrevented) return none;
+    return act('leaveEditMode');
+  }
+
+  // Everything below is command-mode-only AND requires the DOM target to be
+  // the cell's own section — this is the fix for "letters fire on body or
+  // while typing" (docs/KEYBOARD.md "The two modes").
+  if (mode !== 'command' || !isCellTarget(e.target) || mod || e.altKey) return none;
+
+  switch (e.key) {
+    case 'a':
+      return act('insertAbove');
+    case 'b':
+      return act('insertBelow');
+    case 'd': {
+      if (chord.now - chord.lastDeleteAt < DELETE_CHORD_MS) {
+        return { action: { type: 'deleteSelected' }, lastDeleteAt: 0 };
+      }
+      return { action: null, lastDeleteAt: chord.now };
+    }
+    case 'm':
+      return act('setMarkdown');
+    case 'y':
+      return act('setCode');
+    case 'x':
+      return act('cut');
+    case 'c':
+      return act('copy');
+    case 'v':
+      return act('paste');
+    case 'z':
+      return act('undoDelete');
+    case 'M':
+      return act('mergeBelow');
+    case 'o':
+      return act('toggleOutputCollapse');
+    case 'O':
+      return act('toggleOutputCollapseAll');
+    case 'l':
+      return act('toggleLineNumbers');
+    case '?':
+    case 'h':
+      return act('openHelp');
+    case 'Enter':
+      return act('enterEditMode');
+    case 'k':
+    case 'ArrowUp':
+      return act('selectPrev');
+    case 'j':
+    case 'ArrowDown':
+      return act('selectNext');
+    default:
+      return none;
+  }
 }
 
 export function Notebook() {
@@ -69,11 +175,9 @@ export function Notebook() {
   const error = useNotebookStore((s) => s.error);
   const select = useNotebookStore((s) => s.select);
   const runCell = useNotebookStore((s) => s.runCell);
-  const runAndAdvance = useNotebookStore((s) => s.runAndAdvance);
   const insertCell = useNotebookStore((s) => s.insertCell);
   const deleteCell = useNotebookStore((s) => s.deleteCell);
   const setCellType = useNotebookStore((s) => s.setCellType);
-  const save = useNotebookStore((s) => s.save);
   const cutCells = useNotebookStore((s) => s.cutCells);
   const copyCells = useNotebookStore((s) => s.copyCells);
   const pasteCells = useNotebookStore((s) => s.pasteCells);
@@ -84,165 +188,145 @@ export function Notebook() {
   const runAbove = useNotebookStore((s) => s.runAbove);
   const runBelow = useNotebookStore((s) => s.runBelow);
 
+  const autosaveStatus = useAutosaveStatus();
+  const helpOpen = useShortcutsHelpOpen();
+
   const lastDeleteRef = useRef(0);
 
   // `?fixture=1` is handled once, in NotebookView: it owns the decision of
   // what is open, and <Notebook/> only renders once something is.
 
   function handleKeyDown(e: ReactKeyboardEvent<HTMLDivElement>) {
-    const mod = e.ctrlKey || e.metaKey;
-
-    if (mod && (e.key === 's' || e.key === 'S')) {
-      e.preventDefault();
-      void save();
-      return;
-    }
-    if (e.key === 'Enter' && e.shiftKey) {
-      e.preventDefault();
-      if (selectedCellId) void runAndAdvance(selectedCellId);
-      return;
-    }
-    if (e.key === 'Enter' && e.altKey) {
-      e.preventDefault();
-      if (selectedCellId) {
-        void runCell(selectedCellId);
-        const newId = insertCell(selectedCellId, 'code');
-        select(newId);
-      }
-      return;
-    }
-    if (e.key === 'Enter' && mod) {
-      e.preventDefault();
-      if (selectedCellId) void runCell(selectedCellId);
-      return;
-    }
-
-    // Run above / run below work in both edit and command mode.
-    if (mod && e.shiftKey && e.key.toLowerCase() === 'a') {
-      e.preventDefault();
-      if (selectedCellId) void runAbove(selectedCellId);
-      return;
-    }
-    if (mod && e.shiftKey && e.key.toLowerCase() === 'b') {
-      e.preventDefault();
-      if (selectedCellId) void runBelow(selectedCellId);
-      return;
-    }
-
-    // Split at cursor, edit mode only: see splitOffsetFromSelection's note
-    // on why this is DOM-derived rather than a CodeMirror cursor offset.
-    if (mod && e.shiftKey && (e.key === '_' || e.key === '-') && isEditingTarget(e.target) && notebook) {
-      const cell = notebook.cells.find((c) => c.id === selectedCellId);
-      if (cell) {
-        const offset = splitOffsetFromSelection(cell, e.target);
-        if (offset !== null) {
-          e.preventDefault();
-          splitCell(cell.id, offset);
-          return;
-        }
-      }
-    }
-
-    // Escape while editing drops back into command mode on the cell itself
-    // (Cell.tsx's own effect won't re-fire just from this blur, so focus the
-    // cell's section explicitly rather than leaving focus nowhere).
-    // If CodeMirror already consumed this Escape (closing a completion popup or
-    // an inspect tooltip) it called preventDefault on the native event; leave
-    // the editor focused in that case, as Jupyter does.
-    if (e.key === 'Escape' && isEditingTarget(e.target)) {
-      if (e.nativeEvent.defaultPrevented) return;
-      e.preventDefault();
-      const cellEl = (e.target as HTMLElement).closest('.cell');
-      (document.activeElement as HTMLElement | null)?.blur();
-      if (cellEl instanceof HTMLElement) cellEl.focus();
-      return;
-    }
-
-    if (isEditingTarget(e.target) || !notebook) return;
+    if (!notebook) return;
+    const mode: CellMode = e.target instanceof HTMLElement && e.target.closest('.cm-editor') ? 'edit' : 'command';
+    const { action, lastDeleteAt } = resolveKey(
+      {
+        key: e.key,
+        ctrlKey: e.ctrlKey,
+        metaKey: e.metaKey,
+        shiftKey: e.shiftKey,
+        altKey: e.altKey,
+        target: e.target,
+        defaultPrevented: e.nativeEvent.defaultPrevented,
+      },
+      mode,
+      { now: Date.now(), lastDeleteAt: lastDeleteRef.current },
+    );
+    lastDeleteRef.current = lastDeleteAt;
+    if (!action) return;
+    e.preventDefault();
 
     const idx = notebook.cells.findIndex((c) => c.id === selectedCellId);
 
-    switch (e.key) {
-      case 'a': {
-        e.preventDefault();
+    switch (action.type) {
+      case 'runAndAdvance': {
+        // Advance immediately (like Jupyter) rather than after the run
+        // settles: queue the run, then select and focus the next cell so
+        // typing continues in the next box even while this one executes.
+        if (!selectedCellId) break;
+        const cells = notebook.cells;
+        const idx = cells.findIndex((c) => c.id === selectedCellId);
+        void runCell(selectedCellId);
+        const nextId = idx >= 0 && idx < cells.length - 1 ? cells[idx + 1].id : insertCell(selectedCellId, 'code');
+        select(nextId);
+        editorRegistry.focus(nextId);
+        break;
+      }
+      case 'runInsertBelow': {
+        if (!selectedCellId) break;
+        void runCell(selectedCellId);
+        const newId = insertCell(selectedCellId, 'code');
+        select(newId);
+        editorRegistry.focus(newId);
+        break;
+      }
+      case 'runStay':
+        if (selectedCellId) void runCell(selectedCellId);
+        break;
+      case 'runAbove':
+        if (selectedCellId) void runAbove(selectedCellId);
+        break;
+      case 'runBelow':
+        if (selectedCellId) void runBelow(selectedCellId);
+        break;
+      case 'splitAtCursor': {
+        if (!selectedCellId) break;
+        const offset = editorRegistry.getCursor(selectedCellId);
+        if (offset !== null) splitCell(selectedCellId, offset);
+        break;
+      }
+      case 'leaveEditMode': {
+        const cellEl = (e.target as HTMLElement).closest('.cell');
+        (document.activeElement as HTMLElement | null)?.blur();
+        if (cellEl instanceof HTMLElement) cellEl.focus();
+        break;
+      }
+      case 'enterEditMode':
+        if (selectedCellId) editorRegistry.focus(selectedCellId);
+        break;
+      case 'insertAbove': {
         const afterId = idx > 0 ? notebook.cells[idx - 1].id : null;
         select(insertCell(afterId, 'code'));
         break;
       }
-      case 'b': {
-        e.preventDefault();
+      case 'insertBelow':
         select(insertCell(selectedCellId, 'code'));
         break;
-      }
-      case 'd': {
-        const now = Date.now();
-        if (now - lastDeleteRef.current < DELETE_CHORD_MS) {
-          e.preventDefault();
-          if (selectedCellId) deleteCell(selectedCellId);
-          lastDeleteRef.current = 0;
-        } else {
-          lastDeleteRef.current = now;
+      case 'deleteSelected':
+        if (selectedCellId) {
+          deleteCell(selectedCellId);
+          editorRegistry.forgetCell(selectedCellId);
         }
         break;
-      }
-      case 'm': {
-        e.preventDefault();
+      case 'setMarkdown':
         if (selectedCellId) setCellType(selectedCellId, 'markdown');
         break;
-      }
-      case 'y': {
-        e.preventDefault();
+      case 'setCode':
         if (selectedCellId) setCellType(selectedCellId, 'code');
         break;
-      }
-      case 'x': {
-        e.preventDefault();
-        if (selectedCellId) cutCells([selectedCellId]);
+      case 'cut':
+        if (selectedCellId) {
+          cutCells([selectedCellId]);
+          editorRegistry.forgetCell(selectedCellId);
+        }
         break;
-      }
-      case 'c': {
-        e.preventDefault();
+      case 'copy':
         if (selectedCellId) copyCells([selectedCellId]);
         break;
-      }
-      case 'v': {
-        e.preventDefault();
+      case 'paste':
         pasteCells(selectedCellId);
         break;
-      }
-      case 'z': {
-        e.preventDefault();
+      case 'undoDelete':
         undoDelete();
         break;
-      }
-      case 'M': {
-        // Shift+M: merge the selected cell with the one below it.
-        e.preventDefault();
-        if (selectedCellId) mergeWithBelow(selectedCellId);
+      case 'mergeBelow': {
+        if (!selectedCellId) break;
+        // The cell below loses its own id once merged into this one.
+        const belowId = idx >= 0 ? notebook.cells[idx + 1]?.id : undefined;
+        mergeWithBelow(selectedCellId);
+        if (belowId) editorRegistry.forgetCell(belowId);
         break;
       }
-      case 'o': {
-        e.preventDefault();
+      case 'toggleOutputCollapse':
         if (selectedCellId) toggleCollapse(selectedCellId);
         break;
-      }
-      case 'Enter': {
-        // Plain Enter in command mode (Shift/Alt/Ctrl+Enter are handled
-        // above and never reach here): focus the selected cell's editor.
-        e.preventDefault();
-        focusCellEditor(selectedCellId);
+      case 'toggleOutputCollapseAll':
+        for (const cell of notebook.cells) {
+          if (cell.outputs.length > 0) toggleCollapse(cell.id);
+        }
         break;
-      }
-      case 'ArrowUp': {
-        e.preventDefault();
+      case 'toggleLineNumbers':
+        if (selectedCellId) toggleLineNumbers(selectedCellId);
+        break;
+      case 'openHelp':
+        openShortcutsHelp();
+        break;
+      case 'selectPrev':
         if (idx > 0) select(notebook.cells[idx - 1].id);
         break;
-      }
-      case 'ArrowDown': {
-        e.preventDefault();
+      case 'selectNext':
         if (idx >= 0 && idx < notebook.cells.length - 1) select(notebook.cells[idx + 1].id);
         break;
-      }
       default:
         break;
     }
@@ -253,10 +337,14 @@ export function Notebook() {
   if (!notebook) return <div className="notebook-empty">No notebook open.</div>;
 
   return (
-    <div className="notebook" onKeyDown={handleKeyDown}>
-      {notebook.cells.map((cell) => (
-        <Cell key={cell.id} cell={cell} selected={cell.id === selectedCellId} onSelect={() => select(cell.id)} />
-      ))}
-    </div>
+    <>
+      <div className="notebook" onKeyDown={handleKeyDown}>
+        {autosaveStatus && <div className="autosave-status">{autosaveStatus}</div>}
+        {notebook.cells.map((cell) => (
+          <Cell key={cell.id} cell={cell} selected={cell.id === selectedCellId} onSelect={() => select(cell.id)} />
+        ))}
+      </div>
+      <ShortcutsHelp open={helpOpen} onClose={closeShortcutsHelp} />
+    </>
   );
 }

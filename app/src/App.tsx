@@ -1,24 +1,11 @@
 import type { ComponentType } from 'react';
-import { create } from 'zustand';
 import { AppShell } from './shell/AppShell';
 import { NotebookView } from './views/NotebookView';
 import { MapView } from './views/MapView';
 import { CrewView } from './views/CrewView';
 import { CommsView } from './views/CommsView';
 import { SettingsView } from './views/SettingsView';
-
-export type ViewId = 'map' | 'notebook' | 'crew' | 'comms' | 'settings';
-
-interface UiState {
-  view: ViewId;
-  setView(view: ViewId): void;
-}
-
-/** Which rail item is active. Owned here; the shell and views both read it. */
-export const useUiStore = create<UiState>((set) => ({
-  view: 'notebook',
-  setView: (view) => set({ view }),
-}));
+import { useUiStore, type ViewId } from './shell/uiStore';
 
 const VIEWS: Record<ViewId, ComponentType> = {
   map: MapView,

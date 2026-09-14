@@ -11,8 +11,9 @@ import {
   KernelSpecManager,
   ServerConnection,
   SessionManager,
+  TerminalManager,
 } from '@jupyterlab/services';
-import type { Contents, KernelMessage, Session } from '@jupyterlab/services';
+import type { Contents, KernelMessage, Session, Terminal } from '@jupyterlab/services';
 
 import type {
   CellOutput,
@@ -30,6 +31,8 @@ import type {
   ServerConfig,
   SessionProvider,
   SilentResult,
+  TerminalConnection,
+  TerminalsApi,
 } from './types';
 
 /**
@@ -48,6 +51,7 @@ interface Live {
   sessions: SessionManager;
   specs: KernelSpecManager;
   contents: ContentsManager;
+  terminals: TerminalManager;
 }
 
 /** http://host/ -> ws://host, https://host/ -> wss://host */
@@ -96,9 +100,21 @@ function mapMimeBundle(bundle: Record<string, unknown>): Record<string, string> 
 }
 
 /**
+ * `transient.display_id` off a display_data/update_display_data payload.
+ * Undefined when the kernel did not attach one (the common case).
+ */
+function transientDisplayId(content: unknown): string | undefined {
+  const transient = (content as { transient?: { display_id?: unknown } } | null)?.transient;
+  const id = transient?.display_id;
+  return typeof id === 'string' && id.length > 0 ? id : undefined;
+}
+
+/**
  * Translate one iopub message into a CellOutput, or null for the message
- * types the notebook does not render (status, execute_input, clear_output).
- * Shared by execute() and executeSilent() so both produce identical shapes.
+ * types the notebook does not render (status, execute_input) and for the two
+ * that are dispatched to dedicated handlers instead (clear_output,
+ * update_display_data). Shared by execute() and executeSilent() so both
+ * produce identical shapes.
  */
 function iopubToOutput(msg: KernelMessage.IIOPubMessage): CellOutput | null {
   switch (msg.header.msg_type) {
@@ -112,10 +128,12 @@ function iopubToOutput(msg: KernelMessage.IIOPubMessage): CellOutput | null {
     }
     case 'display_data': {
       const content = (msg as KernelMessage.IDisplayDataMsg).content;
+      const displayId = transientDisplayId(content);
       return {
         type: 'display_data',
         data: mapMimeBundle(content.data as Record<string, unknown>),
         metadata: (content.metadata ?? {}) as Record<string, unknown>,
+        ...(displayId ? { displayId } : {}),
       };
     }
     case 'execute_result': {
@@ -136,8 +154,6 @@ function iopubToOutput(msg: KernelMessage.IIOPubMessage): CellOutput | null {
         traceback: content.traceback ?? [],
       };
     }
-    // TODO(M6): honour clear_output (wait flag) once the notebook store owns
-    // per-cell output buffers.
     default:
       return null;
   }
@@ -166,6 +182,150 @@ function basename(path: string): string {
 function joinPath(dir: string, name: string): string {
   const d = dir.replace(/^\/+|\/+$/g, '');
   return d ? `${d}/${name}` : name;
+}
+
+/** Extensions we upload as text even when the browser reports no MIME type. */
+const TEXT_EXTENSIONS = [
+  '.py',
+  '.md',
+  '.txt',
+  '.json',
+  '.csv',
+  '.toml',
+  '.yaml',
+  '.yml',
+  '.ipynb',
+  '.js',
+  '.ts',
+  '.html',
+  '.css',
+];
+
+function isTextUpload(file: File): boolean {
+  if (file.type.startsWith('text/')) return true;
+  const name = file.name.toLowerCase();
+  return TEXT_EXTENSIONS.some((ext) => name.endsWith(ext));
+}
+
+/** Browser- and node-safe base64 of an ArrayBuffer (no Buffer, no spread blowup). */
+function toBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
+
+/**
+ * Terminal REST client.
+ *
+ * JupyterLab's stock client gates every call on `PageConfig`'s
+ * `terminalsAvailable` flag, which is injected by JupyterLab's own page
+ * template. ORBITAL serves its own HTML, so that flag is always absent and the
+ * stock client refuses to start anything. We talk to `/api/terminals`
+ * ourselves; a server without terminals answers 404 and the error surfaces
+ * normally instead of being pre-empted by a page-config guess.
+ */
+class OrbitalTerminalAPIClient implements Terminal.ITerminalAPIClient {
+  readonly isAvailable = true;
+
+  constructor(readonly serverSettings: ServerConnection.ISettings) {}
+
+  async startNew(options: Terminal.ITerminal.IOptions = {}): Promise<Terminal.IModel> {
+    const res = await this.request('', {
+      method: 'POST',
+      body: JSON.stringify({ name: options.name, cwd: options.cwd }),
+    });
+    return (await res.json()) as Terminal.IModel;
+  }
+
+  async listRunning(): Promise<Terminal.IModel[]> {
+    const res = await this.request('', { method: 'GET' });
+    const models = (await res.json()) as unknown;
+    if (!Array.isArray(models)) {
+      throw new Error('Invalid response from the terminals API: expected a list.');
+    }
+    return models as Terminal.IModel[];
+  }
+
+  async shutdown(name: string): Promise<void> {
+    await this.request(`/${encodeURIComponent(name)}`, { method: 'DELETE' });
+  }
+
+  private async request(suffix: string, init: RequestInit): Promise<Response> {
+    const base = this.serverSettings.baseUrl.replace(/\/+$/, '');
+    const res = await ServerConnection.makeRequest(
+      `${base}/api/terminals${suffix}`,
+      init,
+      this.serverSettings,
+    );
+    if (!res.ok) throw await ServerConnection.ResponseError.create(res);
+    return res;
+  }
+}
+
+/**
+ * Adapts a JupyterLab terminal connection to the seam's TerminalConnection.
+ * `shutdown()` goes through the manager so its running list stays accurate.
+ */
+function wrapTerminal(
+  connection: Terminal.ITerminalConnection,
+  manager: TerminalManager,
+): TerminalConnection {
+  const dataCbs = new Set<(data: string) => void>();
+  const closeCbs = new Set<() => void>();
+  let closed = false;
+
+  const fireClose = () => {
+    if (closed) return;
+    closed = true;
+    for (const cb of [...closeCbs]) guard('onClose', () => cb());
+  };
+
+  const onMessage = (_sender: unknown, msg: Terminal.IMessage) => {
+    if (msg.type === 'stdout') {
+      const text = (msg.content ?? []).map((part) => String(part)).join('');
+      for (const cb of [...dataCbs]) guard('onData', () => cb(text));
+    } else if (msg.type === 'disconnect') {
+      fireClose();
+    }
+  };
+  const onDisposed = () => fireClose();
+
+  connection.messageReceived.connect(onMessage);
+  connection.disposed.connect(onDisposed);
+
+  return {
+    name: connection.name,
+    send: (data: string) => {
+      connection.send({ type: 'stdin', content: [data] });
+    },
+    onData: (cb) => {
+      dataCbs.add(cb);
+      return () => {
+        dataCbs.delete(cb);
+      };
+    },
+    onClose: (cb) => {
+      closeCbs.add(cb);
+      return () => {
+        closeCbs.delete(cb);
+      };
+    },
+    // The server takes rows first, then cols; the two trailing zeros are the
+    // pixel dimensions, which the protocol requires but nothing reads.
+    resize: (cols: number, rows: number) => {
+      connection.send({ type: 'set_size', content: [rows, cols, 0, 0] });
+    },
+    disconnect: () => {
+      connection.dispose();
+    },
+    shutdown: async () => {
+      await manager.shutdown(connection.name);
+    },
+  };
 }
 
 function describeError(err: unknown, cfg: ServerConfig): string {
@@ -244,8 +404,27 @@ class JupyterKernelSession implements KernelSession {
     const emit = (out: CellOutput) => guard('onOutput', () => handlers.onOutput(out));
 
     future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
-      const out = iopubToOutput(msg);
-      if (out) emit(out);
+      switch (msg.header.msg_type) {
+        case 'clear_output': {
+          const wait = (msg as KernelMessage.IClearOutputMsg).content.wait === true;
+          guard('onClearOutput', () => handlers.onClearOutput?.(wait));
+          return;
+        }
+        case 'update_display_data': {
+          const content = (msg as KernelMessage.IUpdateDisplayDataMsg).content;
+          const displayId = transientDisplayId(content);
+          // No display_id means nothing to update in place; Jupyter drops it too.
+          if (!displayId) return;
+          const data = mapMimeBundle(content.data as Record<string, unknown>);
+          const metadata = (content.metadata ?? {}) as Record<string, unknown>;
+          guard('onUpdateDisplay', () => handlers.onUpdateDisplay?.(displayId, data, metadata));
+          return;
+        }
+        default: {
+          const out = iopubToOutput(msg);
+          if (out) emit(out);
+        }
+      }
     };
 
     future.done
@@ -322,6 +501,9 @@ class JupyterKernelSession implements KernelSession {
       store_history: false,
       stop_on_error: false,
     });
+    // Silent runs have no cell to clear and no rendered display to update, so
+    // clear_output/update_display_data are dropped; display_data still carries
+    // its displayId for callers that want it.
     future.onIOPub = (msg: KernelMessage.IIOPubMessage) => {
       const out = iopubToOutput(msg);
       if (out) outputs.push(out);
@@ -405,6 +587,83 @@ export class JupyterSessionProvider implements SessionProvider {
       const renamed = await contents.rename(created.path, joinPath(dir, fileName));
       return renamed.path;
     },
+
+    getFile: async (path: string): Promise<string> => {
+      const model = await this.requireLive().contents.get(path, {
+        type: 'file',
+        format: 'text',
+        content: true,
+      });
+      if (model.format !== 'text') {
+        throw new Error(`${path} is not a text file (server returned format "${model.format}").`);
+      }
+      return typeof model.content === 'string' ? model.content : String(model.content ?? '');
+    },
+
+    saveFile: async (path: string, text: string): Promise<void> => {
+      await this.requireLive().contents.save(path, {
+        type: 'file',
+        format: 'text',
+        content: text,
+      });
+    },
+
+    createFile: async (dir: string, name?: string): Promise<string> => {
+      const contents = this.requireLive().contents;
+      const created = await contents.newUntitled({ path: dir, type: 'file', ext: '.txt' });
+      if (!name) return created.path;
+      const renamed = await contents.rename(created.path, joinPath(dir, name));
+      return renamed.path;
+    },
+
+    createDirectory: async (dir: string, name?: string): Promise<string> => {
+      const contents = this.requireLive().contents;
+      const created = await contents.newUntitled({ path: dir, type: 'directory' });
+      if (!name) return created.path;
+      const renamed = await contents.rename(created.path, joinPath(dir, name));
+      return renamed.path;
+    },
+
+    rename: async (path: string, newPath: string): Promise<void> => {
+      await this.requireLive().contents.rename(path, newPath);
+    },
+
+    delete: async (path: string): Promise<void> => {
+      await this.requireLive().contents.delete(path);
+    },
+
+    upload: async (dir: string, file: File): Promise<string> => {
+      const contents = this.requireLive().contents;
+      const path = joinPath(dir, file.name);
+      if (isTextUpload(file)) {
+        await contents.save(path, { type: 'file', format: 'text', content: await file.text() });
+      } else {
+        await contents.save(path, {
+          type: 'file',
+          format: 'base64',
+          content: toBase64(await file.arrayBuffer()),
+        });
+      }
+      return path;
+    },
+  };
+
+  readonly terminals: TerminalsApi = {
+    list: async (): Promise<string[]> => {
+      const manager = this.requireLive().terminals;
+      await manager.refreshRunning();
+      return Array.from(manager.running()).map((model) => model.name);
+    },
+
+    start: async (): Promise<TerminalConnection> => {
+      const manager = this.requireLive().terminals;
+      return wrapTerminal(await manager.startNew(), manager);
+    },
+
+    connect: async (name: string): Promise<TerminalConnection> => {
+      const manager = this.requireLive().terminals;
+      return wrapTerminal(manager.connectTo({ model: { name } }), manager);
+    },
   };
 
   async connect(cfg: ServerConfig): Promise<void> {
@@ -424,11 +683,15 @@ export class JupyterSessionProvider implements SessionProvider {
     const sessions = new SessionManager({ kernelManager: kernels, serverSettings: settings });
     const specs = new KernelSpecManager({ serverSettings: settings });
     const contents = new ContentsManager({ serverSettings: settings });
+    const terminals = new TerminalManager({
+      serverSettings: settings,
+      terminalAPIClient: new OrbitalTerminalAPIClient(settings),
+    });
 
     // The managers poll in the background; if the server is unreachable their
     // `ready` promises reject. We report failures ourselves (below), so keep
     // those rejections from surfacing as unhandled.
-    for (const ready of [kernels.ready, sessions.ready, specs.ready]) {
+    for (const ready of [kernels.ready, sessions.ready, specs.ready, terminals.ready]) {
       void ready.catch(() => undefined);
     }
 
@@ -445,12 +708,13 @@ export class JupyterSessionProvider implements SessionProvider {
       kernels.dispose();
       specs.dispose();
       contents.dispose();
+      terminals.dispose();
       throw err instanceof Error && err.name === 'OrbitalConnectError'
         ? err
         : new Error(describeError(err, { ...cfg, baseUrl }));
     }
 
-    this.live = { settings, kernels, sessions, specs, contents };
+    this.live = { settings, kernels, sessions, specs, contents, terminals };
     this.config = { ...cfg, baseUrl };
   }
 
@@ -463,6 +727,7 @@ export class JupyterSessionProvider implements SessionProvider {
     live.kernels.dispose();
     live.specs.dispose();
     live.contents.dispose();
+    live.terminals.dispose();
   }
 
   async listKernelSpecs(): Promise<KernelSpecInfo[]> {

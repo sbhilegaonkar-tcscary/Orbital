@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
-import { useUiStore, type ViewId } from '../App';
+import { useUiStore, type ViewId } from './uiStore';
+import { useLayoutStore } from './layout';
 
 function MapIcon() {
   return (
@@ -46,6 +47,16 @@ function SettingsIcon() {
   );
 }
 
+/** A spark/star, distinct from the settings gear: the agent toggle, not a view. */
+function AgentIcon() {
+  return (
+    <svg viewBox="0 0 16 16">
+      <path d="M7 1.5 8.4 5 12 6.4 8.4 7.8 7 11.3 5.6 7.8 2 6.4 5.6 5z" />
+      <path d="M12.3 9.5 13 11.2 14.5 12l-1.5.8-.7 1.7-.7-1.7L10 12l1.6-.8z" />
+    </svg>
+  );
+}
+
 const RAIL_ITEMS: { id: ViewId; label: string; Icon: ComponentType }[] = [
   { id: 'map', label: 'Map', Icon: MapIcon },
   { id: 'notebook', label: 'Notebook', Icon: NotebookIcon },
@@ -57,6 +68,8 @@ const RAIL_ITEMS: { id: ViewId; label: string; Icon: ComponentType }[] = [
 export function Rail() {
   const view = useUiStore((s) => s.view);
   const setView = useUiStore((s) => s.setView);
+  const agentVisible = useLayoutStore((s) => s.panels.agent.visible);
+  const toggleAgent = useLayoutStore((s) => s.toggle);
 
   return (
     <nav className="rail">
@@ -71,6 +84,17 @@ export function Rail() {
           <span className="rail-item-label">{label}</span>
         </button>
       ))}
+      {/* Toggles the agent dock panel; unlike the items above it does not switch the view. */}
+      <button
+        type="button"
+        className={`rail-item${agentVisible ? ' active' : ''}`}
+        aria-pressed={agentVisible}
+        title="Toggle agent panel (Ctrl+Shift+L)"
+        onClick={() => toggleAgent('agent')}
+      >
+        <AgentIcon />
+        <span className="rail-item-label">Agent</span>
+      </button>
     </nav>
   );
 }

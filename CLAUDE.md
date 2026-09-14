@@ -128,6 +128,13 @@ the escalation ladder says so.
 ## 5. Working conventions
 
 - Commit only when asked. Attribution line goes at the end of every commit.
+- **Never kill processes you did not start.** No `taskkill /IM chrome.exe`,
+  no killing Python or Node by image name. Kill only by the PID you spawned.
+  Headless Chrome must use `--user-data-dir` in the scratchpad and its own
+  `--remote-debugging-port`, never the user's profile. Subagent prompts
+  restate this whenever they involve a browser or a server.
+- **One Jupyter Server.** Check `/api/status` before starting one; start only
+  via `scripts/jupyter.*`; never a second copy on another port.
 - Windows host, PowerShell primary. Use forward slashes in paths passed to
   tools; quote paths with spaces.
 - Keep this file short. Project-specific conventions (stack, folder layout,

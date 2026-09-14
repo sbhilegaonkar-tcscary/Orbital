@@ -5,12 +5,16 @@ import type { ContentsEntry } from '../session/types';
 import { Notebook } from '../notebook/Notebook';
 import { TabsBar } from '../notebook/TabsBar';
 import { NotebookToolbar } from '../notebook/NotebookToolbar';
-import { useUiStore } from '../App';
+import { useUiStore } from '../shell/uiStore';
+import { useTabsStore } from '../shell/tabs';
+import { FileEditor } from '../files/FileEditor';
 
 export function NotebookView() {
   const connection = useSessionStore((s) => s.connection);
   const provider = useSessionStore((s) => s.provider);
   const openPaths = useNotebookStore((s) => s.openPaths);
+  const tabs = useTabsStore((s) => s.tabs);
+  const activeTab = useTabsStore((s) => s.activeTab);
 
   const [entries, setEntries] = useState<ContentsEntry[]>([]);
   const [listError, setListError] = useState<string | null>(null);
@@ -65,9 +69,9 @@ export function NotebookView() {
     }
   }
 
-  // An open notebook stays visible even if the connection drops; actions
-  // report "Not connected" instead of the view vanishing.
-  if (openPaths.length === 0 && connection !== 'connected') {
+  // An open document (notebook or file) stays visible even if the connection
+  // drops; actions report "Not connected" instead of the view vanishing.
+  if (tabs.length === 0 && connection !== 'connected') {
     return (
       <div className="view-placeholder">
         <div className="card">
@@ -82,6 +86,15 @@ export function NotebookView() {
             </button>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (activeTab?.kind === 'file') {
+    return (
+      <div className="notebook-view">
+        <TabsBar />
+        <FileEditor key={activeTab.path} path={activeTab.path} />
       </div>
     );
   }

@@ -33,6 +33,8 @@ export type CellOutput =
       data: Record<string, string>;
       metadata?: Record<string, unknown>;
       executionCount?: number;
+      /** From transient.display_id; lets update_display_data replace this output in place. */
+      displayId?: string;
     }
   | { type: 'error'; ename: string; evalue: string; traceback: string[] };
 
@@ -42,6 +44,14 @@ export interface ExecuteHandlers {
   onOutput(out: CellOutput): void;
   onExecutionCount(n: number): void;
   onDone(status: ExecutionResult): void;
+  /**
+   * clear_output. With wait=false the store clears immediately; with wait=true
+   * it clears just before the next output arrives (Jupyter semantics, used by
+   * tqdm and friends).
+   */
+  onClearOutput?(wait: boolean): void;
+  /** update_display_data: replace every output with this displayId, in place. */
+  onUpdateDisplay?(displayId: string, data: Record<string, string>, metadata?: Record<string, unknown>): void;
 }
 
 export interface ExecuteHandle {
@@ -110,6 +120,37 @@ export interface ContentsApi {
   saveNotebook(path: string, nb: unknown): Promise<void>;
   /** Creates an empty notebook; returns its path. */
   createNotebook(dir: string, name?: string): Promise<string>;
+
+  // M6 additions
+  /** Text of a non-notebook file. Throws for binary files. */
+  getFile(path: string): Promise<string>;
+  saveFile(path: string, text: string): Promise<void>;
+  /** Creates an empty text file; returns its path. */
+  createFile(dir: string, name?: string): Promise<string>;
+  createDirectory(dir: string, name?: string): Promise<string>;
+  rename(path: string, newPath: string): Promise<void>;
+  /** Deletes a file or an empty directory. */
+  delete(path: string): Promise<void>;
+  /** Uploads a browser File into dir; returns the created path. Base64 for binary. */
+  upload(dir: string, file: File): Promise<string>;
+}
+
+export interface TerminalConnection {
+  readonly name: string;
+  send(data: string): void;
+  onData(cb: (data: string) => void): () => void;
+  onClose(cb: () => void): () => void;
+  resize(cols: number, rows: number): void;
+  /** Closes the websocket; the server-side shell keeps running. */
+  disconnect(): void;
+  /** Kills the server-side shell. */
+  shutdown(): Promise<void>;
+}
+
+export interface TerminalsApi {
+  list(): Promise<string[]>;
+  start(): Promise<TerminalConnection>;
+  connect(name: string): Promise<TerminalConnection>;
 }
 
 export interface SessionProvider {
@@ -118,4 +159,5 @@ export interface SessionProvider {
   listKernelSpecs(): Promise<KernelSpecInfo[]>;
   openNotebookSession(path: string, kernelName?: string): Promise<KernelSession>;
   readonly contents: ContentsApi;
+  readonly terminals: TerminalsApi;
 }

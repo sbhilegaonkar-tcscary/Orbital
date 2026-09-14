@@ -12,8 +12,15 @@ tabs, a full notebook toolbar with kernel picker, per-cell hover toolbar,
 cut/copy/paste/undo/merge/split/collapse, a command palette (Ctrl+K), and a
 single mode dropdown replacing the segmented dial.
 
-**Next up: M6, parity round two.** File browser, in-app terminal,
-`clear_output` handling, sandboxed HTML outputs, ANSI colors, autosave.
+**M6 and M7 done, awaiting owner test.** M6: file browser with text-file
+tabs, in-app terminal (Git Bash via Jupyter terminals), `clear_output` and
+`update_display_data`, ANSI colors, sandboxed HTML outputs, large-output
+truncation, autosave, movable/resizable docks that always fit the window,
+keyboard rework per `docs/KEYBOARD.md`. M7: agent sidecar on the Claude Agent
+SDK using Claude login, with an in-app panel, notebook tools, and permission
+prompts.
+
+**Next up:** owner testing of M6+M7, then M8 (Map view).
 
 ## How to run
 
@@ -22,7 +29,16 @@ Two terminals from the project root:
 ```
 scripts/jupyter.ps1     # Jupyter Server on :8888 from .venv, root = workspace/
 scripts/app.ps1         # Vite on :5173
+scripts/agent.ps1       # agent sidecar on :8787 (M7); needs a Claude login, see below
 ```
+
+Agent login (once, in the ORBITAL terminal or any shell):
+
+```
+npx -y @anthropic-ai/claude-code@latest auth login
+```
+
+The panel shows this command itself when the sidecar reports no login.
 
 Open http://localhost:5173, click Connect (defaults: `http://localhost:8888`,
 token `orbital-dev`, editable in Settings), pick `hull-stress-analysis.ipynb`,
@@ -48,8 +64,8 @@ skip if the server is not up.
 | M3 | Notebook UI: cells, CodeMirror, outputs, markdown, ipynb load/save | Sonnet | done 2026-09-13 |
 | M4 | Integration, live run, audit, first commit | Fable | done 2026-09-13 |
 | M5 | Parity 1: completion, inspect, inspector, cell ops, kernel picker, tabs, palette, mode dropdown | Opus + Sonnet | done 2026-09-13 |
-| M6 | Parity 2: file browser, terminal, clear_output, sandboxed outputs, ANSI, autosave | Sonnet + Opus | not started |
-| M7 | AI harness: Agent SDK sidecar + panel | Opus | not started |
+| M6 | Parity 2: file browser, terminal, clear_output, sandboxed outputs, ANSI, autosave, docks, keyboard | Sonnet + Opus | done 2026-09-14 |
+| M7 | AI harness: Agent SDK sidecar + panel (Claude login) | Opus + Sonnet | done 2026-09-14, untested with a live login |
 | M8 | Map view, minimal first, orbit mode second | Opus | not started |
 | M9 | Hub: accounts, presence, shared projects, Yjs co-editing | Opus | not started |
 | M10 | Hardening: Playwright e2e, virtualized cells, packaging | Sonnet | not started |
@@ -70,6 +86,15 @@ skip if the server is not up.
 - The mode dropdown lists all four modes with their skins and switches both.
 - Checks: tsc clean, build clean, 53 tests (22 store, 15 live session, 7+1 inspector, 4 model, 4 completion).
 
+## What M6/M7 verified (2026-09-14)
+
+- Checks: tsc clean, build clean, 168 frontend tests, 5 sidecar tests, no color literals.
+- Live: connect → open → Shift+Enter runs the cell and moves focus into the next cell's editor; typing lands there; Escape returns to command mode (verified by a CDP-driven headless run, see session log).
+- Terminal: Git Bash prompt visible in the bottom dock; `echo` round-trips.
+- `clear_output(wait=True)` loops render one line that updates in place.
+- Fit: `scrollWidth === clientWidth` and `scrollHeight === clientHeight` at 1280×800, 1024×700, 800×600; side docks become overlays under 900px.
+- Agent panel: connects to the sidecar and shows the login gate with the exact `auth login` command when no Claude login exists (the state on this machine).
+
 ## Decisions log
 
 - **2026-09-13** Custom web frontend on Jupyter Server, not a JupyterLab or VS Code extension. Reason: whole-shell control; kernel protocol and ipynb are the durable parts.
@@ -80,9 +105,19 @@ skip if the server is not up.
 - **2026-09-13** Switching notebooks leaves the previous kernel running (Jupyter convention; `openNotebookSession` reuses it on return). Explicit Close shuts it down.
 - **2026-09-13** M5: multi-document store (`docs` by path, per-path execution queues, module-level kernel session map). Escape in an editor only leaves edit mode when CodeMirror did not consume it (popup/tooltip open).
 - **2026-09-13** Jupyter Server reports `execution_state: "starting"` until the first websocket client connects, so a raw REST kernel probe is not a health check; the live vitest suite is. On Windows a venv's `python.exe` is a launcher, so the server's real process shows the base interpreter's path in the process list; that is normal. The config now refuses to start outside the venv.
+- **2026-09-14** M7 AI harness will use **Claude login** (Agent SDK with the user's Claude account), not an API key. Owner decision.
+- **2026-09-14** Shift+Enter lands in **edit mode** on the next cell (differs from classic Jupyter). Single-letter shortcuts fire only when a `.cell` element itself has focus. See `docs/KEYBOARD.md`.
+- **2026-09-14** Panel sizes are stored as the user's preference and clamped only at render time (`effectiveSize`). Persisting clamped values made a briefly narrow window shrink every panel permanently.
+- **2026-09-14** `useUiStore` moved to `shell/uiStore.ts`; `shell/commands.ts` must never import anything that imports `notebook/commands.ts` (module-init cycle caused TDZ errors).
+- **2026-09-14** Sidecar auth probe: `claude auth status --json` from the SDK's bundled runtime first, a one-turn `query()` only when a credential exists but might be stale.
+- **2026-09-14** A subagent force-killed all Chrome processes during a live check; CLAUDE.md now forbids killing processes not spawned by the agent.
 - **2026-09-13** Execution count arrives from `execute_reply` at the end, so a cell shows `[*]` until it finishes. Early fill from `execute_input` is a known small improvement, not done.
 
 ## Known gaps / debt
+
+- **Agent panel untested with a real login** on this machine; the login flow itself (`auth login`) opens a browser OAuth page the user completes.
+- **Terminal text probe**: xterm renders to canvas, so `.xterm-rows` is empty; use screenshots to verify.
+- **ipywidgets** still unsupported (widget comm protocol).
 
 - **Inspector polish**: modules show their full repr instead of `name version`; IPython's injected `open` shows as a variable. Filter builtins and format modules.
 - **Split at cursor** uses the DOM line under the selection (end of that line), not the exact character offset; CodeEditor needs to expose the cursor for a precise split.
@@ -97,10 +132,10 @@ skip if the server is not up.
 
 ## Open questions for the owner
 
-- M7 AI harness needs an Anthropic API key or Claude login at run time; confirm which before that milestone.
 - Map view: mockup round or straight to one direction?
 
 ## Session log
 
 - **2026-09-13 session 1** — CLAUDE.md; ideas list; architecture recommendation accepted; 16 mockups generated and audited (flex-shrink clipping fix); 4 hand-written E variants; CATALOG.md; docs; venv + Vite scaffold; M1–M3 dispatched in parallel and landed; M4 integration: fixed initial kernel status push, cockpit code size via `--code-size`, fixture path moved into NotebookView; live end-to-end verified; first commit.
+- **2026-09-14 session 1, continued (M6+M7)** — M6 in two phases (A: Opus session additions + clear_output; Sonnet dock layout; Sonnet outputs/ANSI/iframe; Sonnet keyboard/autosave/help. B: Sonnet file browser + tabs; Sonnet terminal). M7 in parallel halves (Opus sidecar/store/executor; Sonnet panel UI). Audit fixes by the orchestrator: Shift+Enter advances immediately into edit mode; Ctrl+W/Ctrl+Tab route through the unified tabs store; layout clamp-persistence bug; import cycles (delegated). Committed.
 - **2026-09-13 session 1, continued** — M5 in two phases: A (Opus: session `complete`/`inspect`/`executeSilent`/`changeKernel` + multi-doc store refactor; Sonnet: mode dropdown + palette; Sonnet: inspector module), B (Sonnet: toolbars, tabs, kernel picker, collapse, keyboard, commands; Sonnet: completion + hover + Shift+Tab). Diagnosed a dead-kernel scare (duplicate servers, one mine on 8889), hardened the Jupyter config, fixed the Escape conflict. Live E2E verified. Committed.

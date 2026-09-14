@@ -6,6 +6,11 @@
  */
 import type { NotebookModel } from './model';
 
+// M6 phase A3 (Output.tsx): a 12,000-line stream to exercise the large-output
+// truncation ("first 200 / last 50 lines, Show all" toggle).
+const bigTelemetryLog =
+  Array.from({ length: 12_000 }, (_, i) => `[${String(i).padStart(5, '0')}] telemetry sample ok`).join('\n') + '\n';
+
 export const fixtureNotebook: NotebookModel = {
   path: 'hull-stress-analysis.ipynb',
   nbformat: 4,
@@ -23,6 +28,62 @@ export const fixtureNotebook: NotebookModel = {
       outputs: [],
       executionCount: null,
       state: 'idle',
+      metadata: {},
+    },
+    {
+      id: 'fixture-ansi',
+      type: 'code',
+      source:
+        'from tqdm import tqdm\nimport time\nfor i in tqdm(range(3)):\n    time.sleep(0.1)\nprint("done")',
+      outputs: [
+        {
+          type: 'stream',
+          name: 'stdout',
+          text:
+            '[32m100%|██████████[0m| 3/3 [00:00<00:00, 9.98it/s]\n' +
+            '[1m[36mINFO[0m: fitting complete\n' +
+            '[31mWARNING[0m: 2 panels near yield\n' +
+            'done\n',
+        },
+      ],
+      executionCount: 4,
+      state: 'ok',
+      metadata: {},
+    },
+    {
+      id: 'fixture-html-script',
+      type: 'code',
+      source:
+        'from IPython.display import HTML\n' +
+        'HTML("<div id=\\"chart\\">chart placeholder</div>"\n' +
+        '     "<script>document.body.innerHTML += \'<p>script ran</p>\';</script>")',
+      outputs: [
+        {
+          type: 'execute_result',
+          executionCount: 5,
+          data: {
+            'text/html':
+              '<div id="chart">chart placeholder</div><script>document.body.innerHTML += \'<p>script ran</p>\';</script>',
+          },
+        },
+      ],
+      executionCount: 5,
+      state: 'ok',
+      metadata: {},
+    },
+    {
+      id: 'fixture-big-log',
+      type: 'code',
+      source: 'for i in range(12_000):\n    print(f"[{i:05d}] telemetry sample ok")',
+      outputs: [
+        {
+          type: 'stream',
+          name: 'stdout',
+          text: bigTelemetryLog,
+        },
+      ],
+      executionCount: 6,
+      state: 'ok',
       metadata: {},
     },
     {

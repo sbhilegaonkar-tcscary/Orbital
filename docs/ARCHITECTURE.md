@@ -217,6 +217,76 @@ export function onExecutionSettled(cb: (path: string) => void): () => void;  // 
 
 Consumers never read `docs[activePath]` by hand; they use `useActiveNotebook()`.
 
+## Layout (M6): docks and panels
+
+`shell/layout.ts` owns where things sit. The shell is a fixed 100vw × 100vh
+grid that never scrolls; every region scrolls internally and has
+`min-width: 0; min-height: 0`.
+
+```
+[topbar                                                      ]
+[rail][left dock][ tabs bar                     ][right dock ]
+[    ][          ][ active view                 ][           ]
+[    ][          ][ bottom dock (terminal)       ][           ]
+[statusbar                                                   ]
+```
+
+```ts
+export type PanelId = 'files' | 'inspector' | 'terminal';
+export type DockSide = 'left' | 'right' | 'bottom';
+
+export interface PanelState {
+  visible: boolean;
+  side: DockSide;      // files/inspector: left|right; terminal: bottom only
+  size: number;        // px; width for side docks, height for bottom
+}
+
+export interface LayoutState {
+  panels: Record<PanelId, PanelState>;
+  setVisible(id: PanelId, visible: boolean): void;
+  toggle(id: PanelId): void;
+  setSize(id: PanelId, px: number): void;      // clamped to [min, 50% of viewport]
+  setSide(id: PanelId, side: DockSide): void;  // "move to other side"
+  reset(): void;
+}
+export const useLayoutStore;   // persisted under localStorage 'orbital.layout'
+```
+
+Defaults: files left 260px hidden, inspector right 280px visible, terminal
+bottom 240px hidden. A dock with no visible panels collapses to zero width.
+Resizers are 6px hit areas between regions; dragging updates `size` live and
+respects min sizes (files 180, inspector 220, terminal 120). Below 900px
+viewport width, side docks render as overlays over the view instead of
+columns, so the notebook never drops under ~480px wide.
+
+## Files (M6)
+
+`files/store.ts` holds the tree cache (`entries: Record<dir, ContentsEntry[]>`,
+`expanded: Set<dir>`, `selected: path|null`) and text-file documents
+(`files: Record<path, { text: string; dirty: boolean; language: string }>`).
+Text files open as tabs beside notebooks: `TabsBar` renders
+`useTabsStore().tabs`, a merged ordered list `{ kind: 'notebook'|'file',
+path }` maintained by both stores through `shell/tabs.ts`.
+
+## Terminal (M6)
+
+`terminal/` wraps `@xterm/xterm` with the fit addon. One xterm instance per
+open terminal, kept alive while the dock is hidden (display: none), disposed
+on close. Colors come from the theme tokens: xterm's `theme` object is rebuilt
+from `getComputedStyle(document.documentElement)` on every skin change.
+
+## Outputs (M6)
+
+- `stream` text is rendered through an ANSI converter (`notebook/ansi.ts`
+  gains `ansiToSpans`) that maps the 16 colors plus bold/dim/underline to
+  classes styled from tokens; no inline colors.
+- `text/html` that contains `<script>` (or an `iframe`, `object`, `embed`)
+  renders inside a sandboxed `<iframe sandbox="allow-scripts" srcdoc=…>` that
+  reports its height via `postMessage`; plain HTML keeps the DOMPurify path.
+- `clear_output(wait=True)` defers the clear until the next output; tqdm and
+  progress bars therefore update in place.
+- `update_display_data` replaces outputs by `displayId`.
+
 ## Notebook model (`notebook/model.ts`)
 
 ```ts
@@ -274,6 +344,46 @@ See `docs/DESIGN.md` for tokens and skins. The mechanism:
 
 `scripts/jupyter.ps1` and `scripts/jupyter.sh` start it from `.venv`.
 `scripts/app.ps1` and `scripts/app.sh` run `npm run dev` in `app/`.
+
+## Agent harness (M7)
+
+A coding agent inside ORBITAL, built on the Claude Agent SDK (Claude Code as
+a library) using the user's **Claude login**, never an API key.
+
+```
+agent/                      the sidecar (Node, ESM JavaScript, no build step)
+  server.mjs                WebSocket server on :8787; one SDK query per run
+  tools.mjs                 in-process MCP server exposing the orbital_* tools
+  auth.mjs                  login probe + loginCommand for the UI
+  package.json              @anthropic-ai/claude-agent-sdk, ws
+app/src/agent/
+  protocol.ts               wire contract (source of truth)
+  store.ts                  ws client, run state, transcript, permissions
+  AgentPanel.tsx            dockable panel: transcript, tool cards, prompt box
+  ToolCard.tsx, DiffView.tsx, PermissionBar.tsx, agent.css
+  executor.ts               runs orbital_* tool requests against the notebook/inspector stores
+```
+
+Flow: the panel sends `start` with the prompt and context. The sidecar runs
+`query()` with `cwd = workspace/`, built-in tools (Read, Write, Edit, Glob,
+Grep, Bash) plus the `orbital_*` MCP tools. Every `orbital_*` call is relayed
+to the browser as `tool_request`; `executor.ts` performs it through the
+notebook store (so the user watches cells appear and run) and replies with
+`tool_result`. Permissions: the SDK's `canUseTool` hook forwards mutating
+tools to the browser as `permission_request`; the panel shows Allow / Deny /
+Always allow for this session. Text streams as `delta`; completed turns
+arrive as `blocks`. `result` carries cost and the SDK session id, which the
+panel passes back as `sessionId` on the next `start` to continue the
+conversation.
+
+Auth: the sidecar never handles credentials. On connect it reports
+`auth.status`; when not logged in the panel shows the `loginCommand` and a
+button that opens the ORBITAL terminal with it typed in. The SDK's bundled
+runtime reads the same credentials as the Claude Code CLI.
+
+The agent is a peer of the notebook, not a wrapper around it: closing the
+panel never affects a running notebook, and the notebook store has no
+knowledge of the agent.
 
 ## Later milestones (not designed yet)
 

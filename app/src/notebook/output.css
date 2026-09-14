@@ -1,0 +1,124 @@
+/*
+ * Output.tsx / OutputFrame.tsx styling. Tokens only, per docs/DESIGN.md — the
+ * 16 ANSI colors are derived from the token palette (color-mix), never
+ * literal colors, so they stay correct across every skin.
+ */
+
+:root {
+  --ansi-0: var(--text-muted);
+  --ansi-1: var(--danger);
+  --ansi-2: var(--success);
+  --ansi-3: var(--warning);
+  --ansi-4: var(--accent);
+  --ansi-5: var(--accent-2);
+  --ansi-6: color-mix(in srgb, var(--accent) 60%, var(--success));
+  --ansi-7: var(--text);
+  /* Bright 8-15: same base color mixed 80/20 toward "white" — standing in
+     for literal white, we mix toward --text so the palette stays token-only. */
+  --ansi-8: color-mix(in srgb, var(--ansi-0) 80%, var(--text));
+  --ansi-9: color-mix(in srgb, var(--ansi-1) 80%, var(--text));
+  --ansi-10: color-mix(in srgb, var(--ansi-2) 80%, var(--text));
+  --ansi-11: color-mix(in srgb, var(--ansi-3) 80%, var(--text));
+  --ansi-12: color-mix(in srgb, var(--ansi-4) 80%, var(--text));
+  --ansi-13: color-mix(in srgb, var(--ansi-5) 80%, var(--text));
+  --ansi-14: color-mix(in srgb, var(--ansi-6) 80%, var(--text));
+  --ansi-15: color-mix(in srgb, var(--ansi-7) 80%, var(--text));
+}
+
+.ansi-fg-0 { color: var(--ansi-0); }
+.ansi-fg-1 { color: var(--ansi-1); }
+.ansi-fg-2 { color: var(--ansi-2); }
+.ansi-fg-3 { color: var(--ansi-3); }
+.ansi-fg-4 { color: var(--ansi-4); }
+.ansi-fg-5 { color: var(--ansi-5); }
+.ansi-fg-6 { color: var(--ansi-6); }
+.ansi-fg-7 { color: var(--ansi-7); }
+.ansi-fg-8 { color: var(--ansi-8); }
+.ansi-fg-9 { color: var(--ansi-9); }
+.ansi-fg-10 { color: var(--ansi-10); }
+.ansi-fg-11 { color: var(--ansi-11); }
+.ansi-fg-12 { color: var(--ansi-12); }
+.ansi-fg-13 { color: var(--ansi-13); }
+.ansi-fg-14 { color: var(--ansi-14); }
+.ansi-fg-15 { color: var(--ansi-15); }
+
+.ansi-bg-0 { background: color-mix(in srgb, var(--ansi-0) 25%, transparent); }
+.ansi-bg-1 { background: color-mix(in srgb, var(--ansi-1) 25%, transparent); }
+.ansi-bg-2 { background: color-mix(in srgb, var(--ansi-2) 25%, transparent); }
+.ansi-bg-3 { background: color-mix(in srgb, var(--ansi-3) 25%, transparent); }
+.ansi-bg-4 { background: color-mix(in srgb, var(--ansi-4) 25%, transparent); }
+.ansi-bg-5 { background: color-mix(in srgb, var(--ansi-5) 25%, transparent); }
+.ansi-bg-6 { background: color-mix(in srgb, var(--ansi-6) 25%, transparent); }
+.ansi-bg-7 { background: color-mix(in srgb, var(--ansi-7) 25%, transparent); }
+.ansi-bg-8 { background: color-mix(in srgb, var(--ansi-8) 25%, transparent); }
+.ansi-bg-9 { background: color-mix(in srgb, var(--ansi-9) 25%, transparent); }
+.ansi-bg-10 { background: color-mix(in srgb, var(--ansi-10) 25%, transparent); }
+.ansi-bg-11 { background: color-mix(in srgb, var(--ansi-11) 25%, transparent); }
+.ansi-bg-12 { background: color-mix(in srgb, var(--ansi-12) 25%, transparent); }
+.ansi-bg-13 { background: color-mix(in srgb, var(--ansi-13) 25%, transparent); }
+.ansi-bg-14 { background: color-mix(in srgb, var(--ansi-14) 25%, transparent); }
+.ansi-bg-15 { background: color-mix(in srgb, var(--ansi-15) 25%, transparent); }
+
+.ansi-bold { font-weight: 700; }
+.ansi-dim { opacity: 0.65; }
+.ansi-italic { font-style: italic; }
+.ansi-underline { text-decoration: underline; }
+.ansi-inverse { filter: invert(1); }
+
+/* stderr: a subtle danger tint on the left edge rather than red-texting the
+   whole stream. The duplicated attribute selector is a specificity bump so
+   this wins over notebook.css's stream rule regardless of stylesheet order. */
+.cell-output-stream[data-name='stderr'][data-name='stderr'] {
+  position: relative;
+  color: inherit;
+  padding-left: 10px;
+  border-left: 2px solid color-mix(in srgb, var(--danger) 55%, transparent);
+}
+
+.cell-output-markdown {
+  font-size: 13px;
+  line-height: 1.6;
+  color: color-mix(in srgb, var(--text) 88%, var(--text-muted));
+}
+
+.cell-output-markdown code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  color: var(--accent-2);
+  background: color-mix(in srgb, var(--accent-2) 12%, transparent);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.cell-output-markdown a {
+  color: var(--accent);
+}
+
+.cell-output-frame {
+  width: 100%;
+  display: block;
+  margin-top: 2px;
+}
+
+/* large-output truncation toggle */
+.cell-output-truncated {
+  display: block;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.cell-output-show-all {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-style: italic;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.cell-output-show-all:hover {
+  color: var(--accent-2);
+}

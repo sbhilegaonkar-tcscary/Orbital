@@ -5,11 +5,22 @@
  * "Change kernel to …" is one command per `kernelSpecs` entry, kept in sync
  * as the store's spec list changes (populated by `NotebookToolbar`'s mount
  * effect, or by `refreshKernelSpecs()` from anywhere else).
+ *
+ * This module also installs, once, the two module-init side effects that
+ * must exist independent of any single component being mounted:
+ *  - the "Global" table of docs/KEYBOARD.md that is notebook-related
+ *    (Ctrl+S / Ctrl+W / Ctrl+Tab / Ctrl+Shift+Tab), as a single `document`
+ *    keydown listener so these work no matter where focus is in the app;
+ *  - autosave (`./autosave`).
  */
-import { registerCommand, unregisterCommand } from '../shell/commands';
+import { registerCommand, unregisterCommand, useCommandStore } from '../shell/commands';
 import { useNotebookStore } from './store';
 import { useSessionStore } from '../session/store';
 import type { KernelSpecInfo } from '../session/types';
+import { installAutosave } from './autosave';
+import { openShortcutsHelp } from '../shell/shortcuts';
+import { useTabsStore } from '../shell/tabs';
+import { saveActiveFile, useFilesStore } from '../files/store';
 
 const CATEGORY = 'Notebook';
 
@@ -94,12 +105,27 @@ registerCommand({
   run: () => useNotebookStore.getState().clearOutputs(),
 });
 
+/**
+ * Files agent (M6 phase B1): the global Ctrl+S dispatcher above resolves to
+ * this one command id regardless of tab kind, so `run` (and, since the
+ * dispatcher gates on `when`, `when` too) has to branch on the active tab —
+ * `files/store.ts`'s `saveActiveFile()` when it's a file, the notebook save
+ * otherwise. `files.saveActive` (shell/commands.ts) covers the palette entry
+ * for the file case on its own.
+ */
 registerCommand({
   id: 'notebook.save',
   title: 'Save',
   category: CATEGORY,
-  when: hasActiveDoc,
-  run: () => void useNotebookStore.getState().save(),
+  shortcut: 'Ctrl+S',
+  when: () => hasActiveDoc() || useTabsStore.getState().activeTab?.kind === 'file',
+  run: () => {
+    if (useTabsStore.getState().activeTab?.kind === 'file') {
+      saveActiveFile();
+      return;
+    }
+    void useNotebookStore.getState().save();
+  },
 });
 
 registerCommand({
@@ -110,12 +136,64 @@ registerCommand({
   run: () => void useNotebookStore.getState().saveAll(),
 });
 
+/**
+ * Ctrl+W's "confirms if dirty" (docs/KEYBOARD.md "Global") lives on the
+ * command itself, not just the keyboard listener below, so the palette and
+ * any future caller get the same safety.
+ */
+/**
+ * Closes whichever tab is active, notebook or text file, through the unified
+ * tabs store; the dirty check covers both kinds.
+ */
+function closeActiveWithConfirm(): void {
+  const tab = useTabsStore.getState().activeTab;
+  if (!tab) return;
+  const isDirty =
+    tab.kind === 'notebook'
+      ? Boolean(useNotebookStore.getState().dirty[tab.path])
+      : Boolean(useFilesStore.getState().files[tab.path]?.dirty);
+  if (isDirty) {
+    const proceed = window.confirm(`Close "${tab.path}"? Unsaved changes will be lost.`);
+    if (!proceed) return;
+  }
+  useTabsStore.getState().closeTab(tab);
+}
+
+const hasActiveTab = (): boolean => useTabsStore.getState().activeTab !== null;
+const hasSeveralTabs = (): boolean => useTabsStore.getState().tabs.length > 1;
+
 registerCommand({
   id: 'notebook.closeNotebook',
-  title: 'Close notebook',
+  title: 'Close tab',
   category: CATEGORY,
-  when: hasActiveDoc,
-  run: () => void useNotebookStore.getState().close(),
+  shortcut: 'Ctrl+W',
+  when: hasActiveTab,
+  run: closeActiveWithConfirm,
+});
+
+registerCommand({
+  id: 'notebook.nextTab',
+  title: 'Next tab',
+  category: CATEGORY,
+  shortcut: 'Ctrl+Tab',
+  when: hasSeveralTabs,
+  run: () => useTabsStore.getState().nextTab(),
+});
+
+registerCommand({
+  id: 'notebook.prevTab',
+  title: 'Previous tab',
+  category: CATEGORY,
+  shortcut: 'Ctrl+Shift+Tab',
+  when: hasSeveralTabs,
+  run: () => useTabsStore.getState().prevTab(),
+});
+
+registerCommand({
+  id: 'notebook.shortcutsHelp',
+  title: 'Keyboard shortcuts',
+  category: CATEGORY,
+  run: () => openShortcutsHelp(),
 });
 
 registerCommand({
@@ -248,3 +326,63 @@ syncKernelCommands(useNotebookStore.getState().kernelSpecs);
 useNotebookStore.subscribe((state, prev) => {
   if (state.kernelSpecs !== prev.kernelSpecs) syncKernelCommands(state.kernelSpecs);
 });
+
+// ---- global shortcuts (docs/KEYBOARD.md "Global", notebook-related subset) ----
+//
+// These must fire no matter where focus is in the app, so — unlike every
+// other shortcut in this codebase — they are not scoped to one component's
+// onKeyDown. Ctrl+B / Ctrl+` / Ctrl+Shift+I are layout toggles owned by
+// another agent and are deliberately not bound here.
+
+const GLOBAL_SHORTCUTS: Record<string, string> = {
+  'Ctrl+S': 'notebook.save',
+  'Ctrl+W': 'notebook.closeNotebook',
+  'Ctrl+Tab': 'notebook.nextTab',
+  'Ctrl+Shift+Tab': 'notebook.prevTab',
+};
+
+/** These are allowed to fire even while a CodeMirror editor has focus. */
+const ALLOWED_IN_CM_EDITOR = new Set(Object.keys(GLOBAL_SHORTCUTS));
+
+function shortcutStringFor(e: KeyboardEvent): string | null {
+  // Tab/Enter etc. arrive as their own `key`; a bare modifier keydown (e.g.
+  // just pressing Ctrl) has no useful shortcut of its own.
+  if (['Control', 'Meta', 'Shift', 'Alt'].includes(e.key)) return null;
+  const parts: string[] = [];
+  if (e.ctrlKey || e.metaKey) parts.push('Ctrl');
+  if (e.shiftKey) parts.push('Shift');
+  if (e.altKey) parts.push('Alt');
+  const key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+  parts.push(key);
+  return parts.join('+');
+}
+
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return true;
+  return target.isContentEditable;
+}
+
+function shouldSkipGlobalShortcut(target: EventTarget | null, shortcut: string): boolean {
+  const inCmEditor = target instanceof HTMLElement && !!target.closest('.cm-editor');
+  if (inCmEditor) return !ALLOWED_IN_CM_EDITOR.has(shortcut);
+  return isTypingTarget(target);
+}
+
+function installGlobalShortcuts(): void {
+  document.addEventListener('keydown', (e) => {
+    const shortcut = shortcutStringFor(e);
+    if (!shortcut) return;
+    const commandId = GLOBAL_SHORTCUTS[shortcut];
+    if (!commandId) return;
+    if (shouldSkipGlobalShortcut(e.target, shortcut)) return;
+
+    const command = useCommandStore.getState().commands[commandId];
+    if (!command || (command.when && !command.when())) return;
+    e.preventDefault();
+    command.run();
+  });
+}
+
+installGlobalShortcuts();
+installAutosave();
