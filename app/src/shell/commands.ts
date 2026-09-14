@@ -82,6 +82,7 @@ for (const { id, label } of MOTION_OPTIONS) {
 }
 
 const VIEW_OPTIONS: { id: ViewId; label: string }[] = [
+  { id: 'home', label: 'Home' },
   { id: 'map', label: 'Map' },
   { id: 'notebook', label: 'Notebook' },
   { id: 'crew', label: 'Crew' },

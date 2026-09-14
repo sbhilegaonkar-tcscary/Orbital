@@ -160,11 +160,66 @@ describe('connection', () => {
     expect(useAgentStore.getState().connection).toBe('disconnected');
   });
 
-  it('explains an unreachable sidecar', () => {
+  it('explains an unreachable sidecar on the first failed dial, and keeps retrying quietly', () => {
+    vi.useFakeTimers();
+    useAgentStore.getState().connect();
+    expect(useAgentStore.getState().connection).toBe('connecting');
+
+    socket().close(); // never opened
+    expect(useAgentStore.getState().connection).toBe('error');
+    expect(useAgentStore.getState().error).toBe(
+      `Agent sidecar is not running at ${URL}. Start it with scripts/agent.ps1 (or scripts/dev.ps1), then Retry.`,
+    );
+
+    // Background retries keep failing silently: still 'error', same message,
+    // no flicker back to a bare "connecting".
+    vi.advanceTimersByTime(1000);
+    expect(useAgentStore.getState().connection).toBe('error');
+    socket().close();
+    expect(useAgentStore.getState().connection).toBe('error');
+    expect(useAgentStore.getState().error).toBe(
+      `Agent sidecar is not running at ${URL}. Start it with scripts/agent.ps1 (or scripts/dev.ps1), then Retry.`,
+    );
+  });
+
+  it('retryNow() dials immediately and clears the error once it succeeds', () => {
     vi.useFakeTimers();
     useAgentStore.getState().connect();
     socket().close();
-    expect(useAgentStore.getState().error).toMatch(/Could not reach the agent sidecar/);
+    expect(useAgentStore.getState().connection).toBe('error');
+
+    useAgentStore.getState().retryNow();
+    expect(useAgentStore.getState().connection).toBe('connecting');
+    expect(useAgentStore.getState().error).toBeNull();
+
+    socket().open();
+    expect(useAgentStore.getState().connection).toBe('connected');
+    expect(useAgentStore.getState().error).toBeNull();
+  });
+
+  it('treats a drop after a good connection as reconnecting, not a flat error', () => {
+    vi.useFakeTimers();
+    const s = connect();
+    s.close();
+    expect(useAgentStore.getState().connection).toBe('connecting');
+    expect(useAgentStore.getState().error).toBe('Lost connection to the agent sidecar. Reconnecting…');
+  });
+
+  it('gives up to the not-running error after 5 failed reattempts following a lost connection', () => {
+    vi.useFakeTimers();
+    const s = connect();
+    s.close();
+    expect(useAgentStore.getState().connection).toBe('connecting');
+
+    for (let i = 0; i < 5; i++) {
+      vi.runOnlyPendingTimers(); // fires the scheduled silent redial, creating a new socket
+      socket().close(); // that redial fails too
+    }
+
+    expect(useAgentStore.getState().connection).toBe('error');
+    expect(useAgentStore.getState().error).toBe(
+      `Agent sidecar is not running at ${URL}. Start it with scripts/agent.ps1 (or scripts/dev.ps1), then Retry.`,
+    );
   });
 });
 

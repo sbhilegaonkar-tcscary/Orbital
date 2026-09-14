@@ -198,6 +198,42 @@
   cursor: pointer;
 }
 
+.agent-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: agent-spin 0.8s linear infinite;
+}
+
+:root:not([data-motion='reduced']) .agent-spinner {
+  animation: agent-spin 0.8s linear infinite;
+}
+
+[data-motion='reduced'] .agent-spinner {
+  animation: none;
+  opacity: 0.6;
+}
+
+@keyframes agent-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Wraps the reused AuthGate command box in the not-running view: `agent-empty`
+   centers its children, but the command row/copy/open-in-terminal trio reads
+   better stretched to a fixed width than squeezed to its own content. */
+.agent-notrunning-cmd {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 360px;
+  gap: 6px;
+  text-align: left;
+}
+
 .agent-authgate {
   display: flex;
   flex: 1 1 auto;

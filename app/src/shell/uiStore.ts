@@ -11,7 +11,7 @@
  */
 import { create } from 'zustand';
 
-export type ViewId = 'map' | 'notebook' | 'crew' | 'comms' | 'settings';
+export type ViewId = 'map' | 'notebook' | 'crew' | 'comms' | 'settings' | 'home';
 
 interface UiState {
   view: ViewId;

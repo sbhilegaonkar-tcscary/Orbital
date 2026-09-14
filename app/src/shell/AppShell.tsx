@@ -2,6 +2,7 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { useThemeStore } from '../theme/ThemeProvider';
 import { Sky } from '../effects/Sky';
 import { TopBar } from './TopBar';
+import { HintStrip } from './HintStrip';
 import { Rail } from './Rail';
 import { StatusBar } from './StatusBar';
 import { CommandPalette } from './CommandPalette';
@@ -152,6 +153,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="app-shell" style={gridStyle}>
       {mode === 'bridge' && <Sky />}
       <TopBar />
+      <HintStrip />
       <Rail />
 
       {showLeftColumn && (

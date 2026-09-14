@@ -165,6 +165,8 @@ export interface AgentState {
 
   setUrl(url: string): void;
   connect(): void;
+  /** Resets backoff and dials immediately. For the panel's Retry button. */
+  retryNow(): void;
   disconnect(): void;
   checkAuth(): void;
   /** Builds an `AgentContext` from the notebook/session stores per the include flags. */
@@ -180,12 +182,27 @@ export interface AgentState {
 
 const RECONNECT_MIN_MS = 1000;
 const RECONNECT_MAX_MS = 10_000;
+/** Failed redials tolerated after losing a good connection before we stop
+ *  calling it "reconnecting" and admit the sidecar looks down. */
+const LOST_CONNECTION_GIVE_UP_ATTEMPTS = 5;
+
+const LOST_CONNECTION_MESSAGE = 'Lost connection to the agent sidecar. Reconnecting…';
+
+function notRunningMessage(url: string): string {
+  return `Agent sidecar is not running at ${url}. Start it with scripts/agent.ps1 (or scripts/dev.ps1), then Retry.`;
+}
 
 let socket: WebSocketLike | null = null;
 /** True while the panel wants a connection; drives the reconnect loop. */
 let wantConnection = false;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let backoffMs = RECONNECT_MIN_MS;
+/** Consecutive failed redials since a good connection was lost; meaningful only while `lostConnection`. */
+let reconnectAttempts = 0;
+/** True from the moment a once-open connection drops until we either
+ *  reconnect or give up after `LOST_CONNECTION_GIVE_UP_ATTEMPTS`. Distinguishes
+ *  "reconnecting" (honest spinner) from "never reached it" (plain error). */
+let lostConnection = false;
 const clientId = cryptoId();
 
 function clearReconnect(): void {
@@ -376,26 +393,50 @@ export const useAgentStore = create<AgentState>((set, get) => {
     backoffMs = Math.min(backoffMs * 2, RECONNECT_MAX_MS);
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null;
-      if (wantConnection) openSocket();
+      // Background retry: silent. It must not flip a settled 'error' (or the
+      // in-progress 'connecting' + lost-connection message) back to a bare
+      // "connecting" with no explanation while the attempt is in flight.
+      if (wantConnection) openSocket(false);
     }, delay);
   }
 
-  function openSocket(): void {
+  /** A dial failed before ever opening. Distinguishes "never reached it" from
+   *  "lost a good connection", and owns the give-up-after-N-reattempts rule.
+   *  Also resets the run bookkeeping a dead socket can no longer service. */
+  function handleDialFailure(url: string): void {
+    const runReset = { runStatus: 'idle' as const, currentRunId: null, pendingPermission: null };
+    if (lostConnection) {
+      reconnectAttempts += 1;
+      if (reconnectAttempts >= LOST_CONNECTION_GIVE_UP_ATTEMPTS) {
+        lostConnection = false;
+        set({ connection: 'error', error: notRunningMessage(url), ...runReset });
+        return;
+      }
+      set({ connection: 'connecting', error: LOST_CONNECTION_MESSAGE, ...runReset });
+      return;
+    }
+    set({ connection: 'error', error: notRunningMessage(url), ...runReset });
+  }
+
+  /**
+   * @param showConnecting Only true for the very first dial and an explicit
+   * `connect()`/`retryNow()`. Background retries pass `false` so the honest
+   * error (or "reconnecting…") stays on screen instead of flickering to a
+   * bare spinner while the silent redial is in flight.
+   */
+  function openSocket(showConnecting: boolean): void {
     clearReconnect();
     teardownSocket();
 
     const url = get().url;
-    set({ connection: 'connecting', error: null });
+    if (showConnecting) set({ connection: 'connecting', error: null });
 
     let opened = false;
     let next: WebSocketLike;
     try {
       next = createSocket(url);
-    } catch (err) {
-      set({
-        connection: 'error',
-        error: err instanceof Error ? err.message : `Could not open ${url}.`,
-      });
+    } catch {
+      handleDialFailure(url);
       if (wantConnection) scheduleReconnect();
       return;
     }
@@ -405,6 +446,8 @@ export const useAgentStore = create<AgentState>((set, get) => {
       if (socket !== next) return;
       opened = true;
       backoffMs = RECONNECT_MIN_MS;
+      reconnectAttempts = 0;
+      lostConnection = false;
       set({ connection: 'connected', error: null });
       sendJson({ type: 'hello', clientId });
     };
@@ -415,25 +458,37 @@ export const useAgentStore = create<AgentState>((set, get) => {
     };
 
     next.onerror = () => {
-      // `onclose` always follows and owns the reconnect; this only records why.
+      // `onclose` always follows and owns the state transition.
       if (socket !== next) return;
-      set((s) => ({ error: `The agent sidecar connection to ${s.url} failed.` }));
     };
 
     next.onclose = () => {
       if (socket !== next) return;
       socket = null;
-      set((s) => ({
-        connection: wantConnection ? 'connecting' : 'disconnected',
-        error:
-          wantConnection && !opened
-            ? `Could not reach the agent sidecar at ${s.url}. Start it with scripts/agent.ps1.`
-            : s.error,
-        runStatus: 'idle',
-        currentRunId: null,
-        pendingPermission: null,
-      }));
-      if (wantConnection) scheduleReconnect();
+      if (!wantConnection) {
+        set({
+          connection: 'disconnected',
+          runStatus: 'idle',
+          currentRunId: null,
+          pendingPermission: null,
+        });
+        return;
+      }
+      if (opened) {
+        // It was good a moment ago: an honest spinner, not a flat error.
+        lostConnection = true;
+        reconnectAttempts = 0;
+        set({
+          connection: 'connecting',
+          error: LOST_CONNECTION_MESSAGE,
+          runStatus: 'idle',
+          currentRunId: null,
+          pendingPermission: null,
+        });
+      } else {
+        handleDialFailure(url);
+      }
+      scheduleReconnect();
     };
   }
 
@@ -465,23 +520,37 @@ export const useAgentStore = create<AgentState>((set, get) => {
       set({ url });
       persist(get());
       // A live socket points at the old address; drop it and let the
-      // reconnect loop (or the next `connect()`) dial the new one.
+      // reconnect loop (or the next `connect()`) dial the new one. A new
+      // address is a fresh start: it hasn't lost anything yet.
       teardownSocket();
-      if (wantConnection) openSocket();
+      backoffMs = RECONNECT_MIN_MS;
+      reconnectAttempts = 0;
+      lostConnection = false;
+      if (wantConnection) openSocket(true);
       else set({ connection: 'disconnected' });
     },
 
     connect: () => {
       wantConnection = true;
       backoffMs = RECONNECT_MIN_MS;
+      reconnectAttempts = 0;
       if (socket && (socket.readyState === WS_OPEN || socket.readyState === WS_CONNECTING)) return;
-      openSocket();
+      openSocket(true);
+    },
+
+    retryNow: () => {
+      wantConnection = true;
+      backoffMs = RECONNECT_MIN_MS;
+      reconnectAttempts = 0;
+      openSocket(true);
     },
 
     disconnect: () => {
       wantConnection = false;
       clearReconnect();
       backoffMs = RECONNECT_MIN_MS;
+      reconnectAttempts = 0;
+      lostConnection = false;
       teardownSocket();
       set({
         connection: 'disconnected',

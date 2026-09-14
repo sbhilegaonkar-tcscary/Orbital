@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react';
 import { useUiStore, type ViewId } from './uiStore';
-import { useLayoutStore } from './layout';
+import { useLayoutStore, type PanelId } from './layout';
 
 function MapIcon() {
   return (
@@ -47,12 +47,38 @@ function SettingsIcon() {
   );
 }
 
-/** A spark/star, distinct from the settings gear: the agent toggle, not a view. */
+/** A spark/star, distinct from the settings gear: a panel toggle, not a view. */
 function AgentIcon() {
   return (
     <svg viewBox="0 0 16 16">
       <path d="M7 1.5 8.4 5 12 6.4 8.4 7.8 7 11.3 5.6 7.8 2 6.4 5.6 5z" />
       <path d="M12.3 9.5 13 11.2 14.5 12l-1.5.8-.7 1.7-.7-1.7L10 12l1.6-.8z" />
+    </svg>
+  );
+}
+
+function FilesIcon() {
+  return (
+    <svg viewBox="0 0 16 16">
+      <path d="M1.5 4a1 1 0 0 1 1-1h3.2l1.3 1.6h6.5a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z" />
+    </svg>
+  );
+}
+
+function TerminalIcon() {
+  return (
+    <svg viewBox="0 0 16 16">
+      <rect x="1.5" y="2.5" width="13" height="11" rx="1" />
+      <path d="M4 6.5 6.5 8.5 4 10.5M8.5 10.5h3.5" />
+    </svg>
+  );
+}
+
+function InspectorIcon() {
+  return (
+    <svg viewBox="0 0 16 16">
+      <circle cx="6.8" cy="6.8" r="4.3" />
+      <path d="M10 10l4 4" />
     </svg>
   );
 }
@@ -65,11 +91,21 @@ const RAIL_ITEMS: { id: ViewId; label: string; Icon: ComponentType }[] = [
   { id: 'settings', label: 'Settings', Icon: SettingsIcon },
 ];
 
+/** Panel toggles (docs/KEYBOARD.md "Global"): rail buttons that show/hide a
+ * dock panel instead of switching the view. Order and shortcuts match the
+ * keyboard contract exactly. */
+const PANEL_TOGGLES: { id: PanelId; label: string; Icon: ComponentType; shortcut: string }[] = [
+  { id: 'files', label: 'Files', Icon: FilesIcon, shortcut: 'Ctrl+B' },
+  { id: 'terminal', label: 'Terminal', Icon: TerminalIcon, shortcut: 'Ctrl+`' },
+  { id: 'inspector', label: 'Inspector', Icon: InspectorIcon, shortcut: 'Ctrl+Shift+I' },
+  { id: 'agent', label: 'Agent', Icon: AgentIcon, shortcut: 'Ctrl+Shift+L' },
+];
+
 export function Rail() {
   const view = useUiStore((s) => s.view);
   const setView = useUiStore((s) => s.setView);
-  const agentVisible = useLayoutStore((s) => s.panels.agent.visible);
-  const toggleAgent = useLayoutStore((s) => s.toggle);
+  const panels = useLayoutStore((s) => s.panels);
+  const toggle = useLayoutStore((s) => s.toggle);
 
   return (
     <nav className="rail">
@@ -84,17 +120,25 @@ export function Rail() {
           <span className="rail-item-label">{label}</span>
         </button>
       ))}
-      {/* Toggles the agent dock panel; unlike the items above it does not switch the view. */}
-      <button
-        type="button"
-        className={`rail-item${agentVisible ? ' active' : ''}`}
-        aria-pressed={agentVisible}
-        title="Toggle agent panel (Ctrl+Shift+L)"
-        onClick={() => toggleAgent('agent')}
-      >
-        <AgentIcon />
-        <span className="rail-item-label">Agent</span>
-      </button>
+
+      <div className="rail-divider" role="separator" />
+
+      {PANEL_TOGGLES.map(({ id, label, Icon, shortcut }) => {
+        const lit = panels[id].visible;
+        return (
+          <button
+            key={id}
+            type="button"
+            className={`rail-item rail-toggle${lit ? ' lit' : ''}`}
+            aria-pressed={lit}
+            title={`Toggle ${label.toLowerCase()} (${shortcut})`}
+            onClick={() => toggle(id)}
+          >
+            <Icon />
+            <span className="rail-item-label">{label}</span>
+          </button>
+        );
+      })}
     </nav>
   );
 }

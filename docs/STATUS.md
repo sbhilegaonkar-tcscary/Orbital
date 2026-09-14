@@ -20,17 +20,23 @@ keyboard rework per `docs/KEYBOARD.md`. M7: agent sidecar on the Claude Agent
 SDK using Claude login, with an in-app panel, notebook tools, and permission
 prompts.
 
-**Next up:** owner testing of M6+M7, then M8 (Map view).
+**Next up:** owner testing of M6, M6.5 and M7, then M8 (Map view).
 
 ## How to run
 
-Two terminals from the project root:
+One command from the project root:
 
 ```
-scripts/jupyter.ps1     # Jupyter Server on :8888 from .venv, root = workspace/
-scripts/app.ps1         # Vite on :5173
-scripts/agent.ps1       # agent sidecar on :8787 (M7); needs a Claude login, see below
+scripts/dev.ps1     # Windows
+scripts/dev.sh       # macOS/Linux
 ```
+
+It starts whichever of Jupyter (:8888), the agent sidecar (:8787), and the
+app (:5173) aren't already running — each in its own window/process, from
+`scripts/jupyter.ps1`/`.sh`, `scripts/agent.ps1`/`.sh`, `scripts/app.ps1`/`.sh`
+— prints `<service>: already running` or `<service>: started` for each, then
+opens http://localhost:5173 once the app answers. Run those three scripts
+directly only if you need one service on its own.
 
 Agent login (once, in the ORBITAL terminal or any shell):
 
@@ -66,6 +72,7 @@ skip if the server is not up.
 | M5 | Parity 1: completion, inspect, inspector, cell ops, kernel picker, tabs, palette, mode dropdown | Opus + Sonnet | done 2026-09-13 |
 | M6 | Parity 2: file browser, terminal, clear_output, sandboxed outputs, ANSI, autosave, docks, keyboard | Sonnet + Opus | done 2026-09-14 |
 | M7 | AI harness: Agent SDK sidecar + panel (Claude login) | Opus + Sonnet | done 2026-09-14, untested with a live login |
+| M6.5 | Usability: one launcher, rail activity bar, Home page, layout menu, service dots, honest agent connection states, first-run hint | Sonnet | done 2026-09-14 |
 | M8 | Map view, minimal first, orbit mode second | Opus | not started |
 | M9 | Hub: accounts, presence, shared projects, Yjs co-editing | Opus | not started |
 | M10 | Hardening: Playwright e2e, virtualized cells, packaging | Sonnet | not started |
@@ -107,6 +114,7 @@ skip if the server is not up.
 - **2026-09-13** Jupyter Server reports `execution_state: "starting"` until the first websocket client connects, so a raw REST kernel probe is not a health check; the live vitest suite is. On Windows a venv's `python.exe` is a launcher, so the server's real process shows the base interpreter's path in the process list; that is normal. The config now refuses to start outside the venv.
 - **2026-09-14** M7 AI harness will use **Claude login** (Agent SDK with the user's Claude account), not an API key. Owner decision.
 - **2026-09-14** Shift+Enter lands in **edit mode** on the next cell (differs from classic Jupyter). Single-letter shortcuts fire only when a `.cell` element itself has focus. See `docs/KEYBOARD.md`.
+- **2026-09-14** Owner feedback after M6/M7: the sidecar was never started (three scripts is unfriendly) and closed panels had no visible way back. M6.5 added `scripts/dev.ps1` (one launcher), rail toggles for every panel, the logo as a Home button, a Layout menu, and explicit "sidecar not running" state with the command and a Retry button. `Start-Process -File` needs the script path quoted because the project path contains a space.
 - **2026-09-14** Panel sizes are stored as the user's preference and clamped only at render time (`effectiveSize`). Persisting clamped values made a briefly narrow window shrink every panel permanently.
 - **2026-09-14** `useUiStore` moved to `shell/uiStore.ts`; `shell/commands.ts` must never import anything that imports `notebook/commands.ts` (module-init cycle caused TDZ errors).
 - **2026-09-14** Sidecar auth probe: `claude auth status --json` from the SDK's bundled runtime first, a one-turn `query()` only when a credential exists but might be stale.

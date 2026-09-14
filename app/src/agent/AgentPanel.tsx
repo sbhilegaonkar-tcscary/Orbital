@@ -13,7 +13,7 @@ import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import type { AgentBlock } from './protocol';
 import { useAgentStore, type AgentState, type TranscriptItem } from './store';
-import { AuthGate } from './AuthGate';
+import { AuthGate, CommandBox } from './AuthGate';
 import { ToolCard } from './ToolCard';
 import { PermissionBar } from './PermissionBar';
 import { DEMO_AUTH_LOGGED_OUT, DEMO_PENDING_PERMISSION, DEMO_TRANSCRIPT, EXAMPLE_PROMPTS } from './demo';
@@ -22,6 +22,8 @@ import './agent.css';
 const PROMPT_MAX_LINES = 6;
 const TEXTAREA_LINE_HEIGHT_PX = 18;
 const TEXTAREA_VERTICAL_PADDING_PX = 14;
+/** Shown in the not-running view's command box; matches the message `store.ts` builds around `AGENT_DEFAULT_URL`. */
+const SIDECAR_START_COMMAND = 'scripts/agent.ps1';
 
 const DEMO_STATE_1: Partial<AgentState> = {
   connection: 'connected',
@@ -58,16 +60,24 @@ function useDemoOverride(): Partial<AgentState> | null {
   }, []);
 }
 
-function connectionDotClass(connection: AgentState['connection']): string {
-  switch (connection) {
-    case 'connected':
-      return 'success';
-    case 'connecting':
-      return 'warning';
+/**
+ * Header dot per the spec: muted disconnected, warning connecting, success
+ * connected+logged-in, warning connected-but-not-logged-in, danger error.
+ * `title` carries the exact state text (the connection error, or the
+ * "reconnecting…" message, when there is one).
+ */
+function connectionDotInfo(state: AgentState): { cls: string; title: string } {
+  switch (state.connection) {
     case 'error':
-      return 'danger';
+      return { cls: 'danger', title: state.error ?? 'Agent sidecar connection error.' };
+    case 'connecting':
+      return { cls: 'warning', title: state.error ?? 'Connecting to the agent sidecar…' };
+    case 'connected':
+      return state.auth && !state.auth.loggedIn
+        ? { cls: 'warning', title: 'Connected to the agent sidecar — not logged in.' }
+        : { cls: 'success', title: 'Connected to the agent sidecar.' };
     default:
-      return 'muted';
+      return { cls: 'muted', title: 'Not connected to the agent sidecar.' };
   }
 }
 
@@ -331,18 +341,38 @@ export function AgentPanel() {
   }
 
   function renderBody() {
-    if (state.connection !== 'connected') {
-      const message =
-        state.connection === 'connecting'
-          ? 'Connecting to the agent sidecar…'
-          : state.connection === 'error'
-            ? (state.error ?? 'Could not reach the agent sidecar.')
-            : 'Not connected to the agent sidecar.';
+    if (state.connection === 'disconnected') {
       return (
         <div className="agent-empty">
-          <p className="agent-empty-text">{message}</p>
+          <p className="agent-empty-text">Not connected to the agent sidecar.</p>
           <button type="button" className="agent-connect-btn" onClick={() => state.connect()}>
-            {state.connection === 'error' ? 'Retry' : 'Connect'}
+            Connect
+          </button>
+        </div>
+      );
+    }
+
+    if (state.connection === 'connecting') {
+      return (
+        <div className="agent-empty">
+          <span className="agent-spinner" aria-hidden="true" />
+          <p className="agent-empty-text">{state.error ?? 'Connecting to sidecar…'}</p>
+          <button type="button" className="agent-connect-btn" onClick={() => state.retryNow()}>
+            Retry
+          </button>
+        </div>
+      );
+    }
+
+    if (state.connection === 'error') {
+      return (
+        <div className="agent-empty">
+          <p className="agent-empty-text">{state.error}</p>
+          <div className="agent-notrunning-cmd">
+            <CommandBox command={SIDECAR_START_COMMAND} />
+          </div>
+          <button type="button" className="agent-connect-btn" onClick={() => state.retryNow()}>
+            Retry
           </button>
         </div>
       );
@@ -411,10 +441,12 @@ export function AgentPanel() {
     );
   }
 
+  const dot = connectionDotInfo(state);
+
   return (
     <div className="agent-panel">
       <div className="agent-header">
-        <span className={`agent-dot agent-dot-${connectionDotClass(state.connection)}`} aria-hidden="true" />
+        <span className={`agent-dot agent-dot-${dot.cls}`} title={dot.title} aria-hidden="true" />
         <span className="agent-model">{state.model ?? '—'}</span>
         <span className="agent-cost">${state.totalCostUsd.toFixed(4)}</span>
         <div className="agent-menu-wrap">

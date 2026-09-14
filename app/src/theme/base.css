@@ -752,27 +752,6 @@ a {
   margin-left: 6px;
 }
 
-.notebook-picker {
-  padding: 24px 32px;
-}
-
-.notebook-picker h2 {
-  font: 600 15px/1 var(--font-display);
-  margin-bottom: 16px;
-}
-
-.notebook-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-width: 480px;
-}
-
-.notebook-list button {
-  width: 100%;
-  text-align: left;
-}
-
 .notebook-empty {
   padding: 24px;
   color: var(--text-muted);
@@ -843,4 +822,299 @@ a {
   gap: 6px;
   font-size: 12.5px;
   text-transform: capitalize;
+}
+
+/* ---- topbar logo button (M6.5) --------------------------------------------- */
+.topbar-logo {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 4px 6px;
+}
+
+.topbar-logo:hover {
+  color: var(--accent);
+  border-color: var(--border);
+}
+
+/* ---- layout menu (M6.5), styled like .mode-menu ---------------------------- */
+.layout-menu {
+  position: relative;
+}
+
+.layout-menu-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 5px 10px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.layout-menu-trigger:hover {
+  border-color: var(--border);
+}
+
+.layout-menu-icon {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.layout-menu-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  width: 260px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--bg) 60%, transparent);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.layout-menu-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+}
+
+.layout-menu-row:hover {
+  background: var(--surface-2);
+}
+
+.layout-menu-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+}
+
+.layout-menu-side-control {
+  display: flex;
+  gap: 2px;
+}
+
+.layout-menu-side-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.layout-menu-side-btn svg {
+  width: 10px;
+  height: 10px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.layout-menu-side-btn.active {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.layout-menu-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 6px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.layout-menu-footer button {
+  background: none;
+  border: 1px solid transparent;
+  text-align: left;
+  font-size: 12.5px;
+  padding: 7px 10px;
+}
+
+.layout-menu-footer button:hover {
+  background: var(--surface-2);
+  border-color: transparent;
+}
+
+/* ---- service dots (M6.5), replaces the old lone .kernel-status ------------- */
+.service-dots {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.service-dot-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 400 12px/1 var(--font-mono);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.service-dot-button {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 3px 6px;
+}
+
+.service-dot-button:hover {
+  color: var(--text);
+  border-color: var(--border);
+}
+
+/* ---- rail: panel toggles (M6.5) -------------------------------------------- */
+.rail-divider {
+  height: 1px;
+  margin: 8px 6px;
+  background: var(--border);
+}
+
+.rail-toggle {
+  position: relative;
+}
+
+.rail-toggle.lit {
+  color: var(--accent);
+}
+
+.rail-toggle.lit::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+
+/* ---- home view (M6.5) ------------------------------------------------------ */
+.home-view {
+  height: 100%;
+  overflow-y: auto;
+  padding: 40px 32px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  max-width: 640px;
+}
+
+.home-heading {
+  font: 600 22px/1 var(--font-display);
+}
+
+.home-section-title {
+  font: 600 11px/1 var(--font-display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.home-recent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.home-recent-item {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  text-align: left;
+  background: none;
+  border: 1px solid transparent;
+  padding: 8px 10px;
+}
+
+.home-recent-item:hover {
+  background: var(--surface-2);
+  border-color: var(--border);
+}
+
+.home-recent-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.home-recent-dir {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 400 11px/1 var(--font-mono);
+  color: var(--text-muted);
+}
+
+.home-recent-time {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.home-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* ---- first-run hint strip (M6.5) ------------------------------------------- */
+.hint-strip {
+  position: fixed;
+  top: var(--topbar-h);
+  left: 0;
+  right: 0;
+  /* `.topbar` is its own stacking context at z-index: 2 (base.css "topbar"),
+     so anything higher here would sit in front of its dropdowns (mode menu,
+     layout menu) wherever this strip's band overlaps them. 1 matches the
+     rail/view/statusbar baseline, which is all this needs to sit above. */
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 6px 16px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  font: 400 11.5px/1 var(--font-ui);
+  color: var(--text-muted);
+}
+
+.hint-strip-dismiss {
+  background: none;
+  border: none;
+  padding: 0 2px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-muted);
+}
+
+.hint-strip-dismiss:hover {
+  color: var(--text);
 }
