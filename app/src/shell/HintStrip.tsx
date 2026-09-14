@@ -25,8 +25,14 @@ function alreadyDismissed(): boolean {
   }
 }
 
+/** Dev aid: `?hints=off` pre-dismisses the strip so the dismissed layout is
+ * reproducible in a headless run without scripting localStorage first. */
+function hintsForcedOff(): boolean {
+  return new URLSearchParams(window.location.search).get('hints') === 'off';
+}
+
 export function HintStrip() {
-  const [dismissed, setDismissed] = useState(alreadyDismissed);
+  const [dismissed, setDismissed] = useState(() => alreadyDismissed() || hintsForcedOff());
 
   if (dismissed) return null;
 

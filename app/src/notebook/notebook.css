@@ -271,6 +271,10 @@
 }
 
 /* ---- tabs bar ------------------------------------------------------------ */
+/* Base surface is --surface-2 (docs/DESIGN.md "one base surface"); cockpit
+   and bridge override it in theme/modes.css to match their dock/panel
+   surfaces. The active tab always merges into --surface-2 (see `.tab-active`
+   below) regardless of the strip's own ambient color. */
 .tabs-bar {
   flex: 0 0 auto;
   display: flex;
@@ -278,6 +282,7 @@
   gap: 2px;
   padding: 6px 20px 0;
   overflow-x: auto;
+  background: var(--surface-2);
   border-bottom: 1px solid var(--border);
 }
 
@@ -294,27 +299,20 @@
   font-size: 12px;
   cursor: pointer;
   white-space: nowrap;
-  position: relative;
 }
 
 .tab:hover {
   color: var(--text);
 }
 
+/* Merges with the toolbar below it (docs/DESIGN.md "one base surface"):
+   same background as `.nb-toolbar` in every mode, no bottom border, so the
+   strip's own bottom border appears to break open exactly where the active
+   tab sits. */
 .tab-active {
   color: var(--text);
-  background: var(--surface);
+  background: var(--surface-2);
   border-color: var(--border);
-}
-
-.tab-active::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -1px;
-  height: 2px;
-  background: var(--accent);
 }
 
 .tab-name {
@@ -350,6 +348,7 @@
   align-items: center;
   gap: 14px;
   padding: 8px 20px;
+  background: var(--surface-2);
   border-bottom: 1px solid var(--border);
 }
 

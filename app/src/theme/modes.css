@@ -2,7 +2,10 @@
 
 /* ---- cockpit: dense HUD ---------------------------------------------------- */
 [data-mode='cockpit'] {
-  --rail-w: 76px;
+  /* Widened from 76px: at any narrower width the longest labels
+     ("Inspector", "Terminal") truncate even at the reduced label
+     font-size below. */
+  --rail-w: 88px;
   --topbar-h: 44px;
   --statusbar-h: 24px;
 }
@@ -20,10 +23,17 @@
 }
 
 [data-mode='cockpit'] .rail-item {
-  font-size: 9.5px;
-  letter-spacing: 0.06em;
+  font-size: 8.5px;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
   padding: 8px 2px;
+}
+
+/* Tabs strip surface follows the dock/panel family in cockpit (base.css
+   ".tabs-bar" default is --surface-2); the active tab stays --surface-2
+   everywhere so it always merges with the toolbar below it. */
+[data-mode='cockpit'] .tabs-bar {
+  background: var(--surface);
 }
 
 [data-mode='cockpit'] .card,
@@ -91,20 +101,29 @@
   --nebula-1: color-mix(in srgb, var(--accent-2) 55%, var(--bg));
   --nebula-2: color-mix(in srgb, var(--accent) 55%, var(--bg));
   --nebula-3: color-mix(in srgb, var(--danger) 55%, var(--bg));
+  /* One translucent panel alpha, used everywhere instead of each region
+     computing its own color-mix so the sky shows through evenly. */
+  --panel: color-mix(in srgb, var(--surface) 74%, transparent);
 }
 
+/* Every chrome region — including docks, the center column and the tabs
+   strip (docs/DESIGN.md "one base surface") — shares the same --panel alpha
+   and blur so no region reads as more "solid" than its neighbor. */
 [data-mode='bridge'] .topbar,
 [data-mode='bridge'] .rail,
 [data-mode='bridge'] .inspector,
-[data-mode='bridge'] .statusbar {
-  background: color-mix(in srgb, var(--surface) 74%, transparent);
+[data-mode='bridge'] .statusbar,
+[data-mode='bridge'] .dock,
+[data-mode='bridge'] .center-column,
+[data-mode='bridge'] .tabs-bar {
+  background: var(--panel);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
 
 [data-mode='bridge'] .card,
 [data-mode='bridge'] .skin-popover {
-  background: color-mix(in srgb, var(--surface) 74%, transparent);
+  background: var(--panel);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
