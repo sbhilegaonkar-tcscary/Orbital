@@ -118,6 +118,7 @@ skip if the server is not up.
 - **Agent panel untested with a real login** on this machine; the login flow itself (`auth login`) opens a browser OAuth page the user completes.
 - **Terminal text probe**: xterm renders to canvas, so `.xterm-rows` is empty; use screenshots to verify.
 - **ipywidgets** still unsupported (widget comm protocol).
+- **Live tests can flake** when another client (a browser tab, a headless verifier) holds kernels or terminals on the dev server at the same time; a clean re-run passes. Run `npm test` with no app tab open.
 
 - **Inspector polish**: modules show their full repr instead of `name version`; IPython's injected `open` shows as a variable. Filter builtins and format modules.
 - **Split at cursor** uses the DOM line under the selection (end of that line), not the exact character offset; CodeEditor needs to expose the cursor for a precise split.
