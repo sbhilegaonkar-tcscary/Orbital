@@ -4,8 +4,9 @@
  * command typed in. The sidecar never handles credentials — this is the
  * whole auth UI (docs/ARCHITECTURE.md "Agent harness (M7)").
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { AuthStatus } from './protocol';
+import { useAgentStore } from './store';
 import { useLayoutStore } from '../shell/layout';
 import { getRuntime, useTerminalStore } from '../terminal/store';
 
@@ -67,11 +68,34 @@ export function CommandBox({ command }: CommandBoxProps) {
   );
 }
 
+const RECHECK_MS = 8000;
+
 export function AuthGate({ auth }: AuthGateProps) {
+  const checkAuth = useAgentStore((s) => s.checkAuth);
+  const [checking, setChecking] = useState(false);
+
+  // The user logs in from a terminal; nothing tells the panel when that is
+  // done. Re-ask the sidecar on a short cadence while this gate is showing,
+  // and on demand. The sidecar's stage-1 probe is instant and costs nothing.
+  useEffect(() => {
+    const id = window.setInterval(checkAuth, RECHECK_MS);
+    return () => window.clearInterval(id);
+  }, [checkAuth]);
+
+  function checkNow() {
+    setChecking(true);
+    checkAuth();
+    window.setTimeout(() => setChecking(false), 1500);
+  }
+
   return (
     <div className="agent-authgate">
       <p className="agent-authgate-reason">{auth.reason ?? 'Not logged in to Claude.'}</p>
       <CommandBox command={auth.loginCommand} />
+      <button type="button" className="agent-authgate-open" onClick={checkNow} disabled={checking}>
+        {checking ? 'Checking…' : "I've logged in, check again"}
+      </button>
+      <p className="agent-authgate-hint">Checks automatically every few seconds while this is showing.</p>
     </div>
   );
 }

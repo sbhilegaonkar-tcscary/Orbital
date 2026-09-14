@@ -745,3 +745,5 @@
   color: var(--text-muted);
   font: 400 10.5px/1.3 var(--font-mono);
 }
+
+.agent-authgate-hint { margin: 6px 0 0; font-size: 11px; color: var(--text-muted); }

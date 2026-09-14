@@ -229,7 +229,9 @@ export async function probeAuth({ cwd, force = false }) {
         };
   }
 
-  cached = result;
+  // Only a logged-in answer is worth caching: the logged-out probe is the
+  // free stage-1 check, and the user may finish logging in at any moment.
+  cached = result.loggedIn ? result : null;
   cachedAt = Date.now();
   return result;
 }
