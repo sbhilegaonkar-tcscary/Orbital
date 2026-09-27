@@ -57,8 +57,8 @@ Checks:
 cd app && npx tsc -p tsconfig.app.json --noEmit && npm test && npm run build
 ```
 
-`npm test` runs 53 tests; the live-kernel ones (session, inspector, completion)
-skip if the server is not up.
+`npm test` runs 178 tests; the live-kernel ones skip if the server is not up.
+See `docs/HANDOFF.md` for the resume guide.
 
 ## Milestones
 
