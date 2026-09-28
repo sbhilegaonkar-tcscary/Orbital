@@ -46,6 +46,33 @@ function isMode(value: string | null): value is Mode {
   return value !== null && MODES.some((m) => m.id === value);
 }
 
+/** Live `prefers-reduced-motion: reduce`. Safe before mount (returns false). */
+function usePrefersReducedMotion(): boolean {
+  const [prefers, setPrefers] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  );
+
+  useEffect(() => {
+    const mql = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const onChange = () => setPrefers(mql.matches);
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, []);
+
+  return prefers;
+}
+
+/**
+ * The same answer `ThemeProvider` writes to `:root[data-motion]`, for the
+ * components that must also *skip work* (not just skip a CSS animation) when
+ * motion is reduced — the map's frame loop, above all.
+ */
+export function useReducedMotion(): boolean {
+  const motion = useThemeStore((s) => s.motion);
+  const prefers = usePrefersReducedMotion();
+  return motion === 'reduced' || (motion === 'system' && prefers);
+}
+
 /**
  * Applies the current theme selection to `document.documentElement` and
  * injects the active skin's font stylesheet. Honors `?mode=` and `?skin=`
@@ -72,16 +99,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-  );
-
-  useEffect(() => {
-    const mql = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const onChange = () => setPrefersReducedMotion(mql.matches);
-    mql.addEventListener('change', onChange);
-    return () => mql.removeEventListener('change', onChange);
-  }, []);
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   useEffect(() => {
     const root = document.documentElement;

@@ -61,6 +61,57 @@ mode): the owner wants typing to continue in the next box.
 | L | Toggle line numbers in this cell. |
 | ? or H | Keyboard help overlay. |
 
+## Map view
+
+Active when the Map view has focus and no text input does. Single letters
+follow the notebook rule: they fire only when focus is on the map container or
+on a body, never in an input.
+
+| Keys | Action |
+|---|---|
+| Tab / Shift+Tab | Next / previous body (orbit order: inner to outer, then by angle). |
+| Enter or Space | Open the selection, or enter the folder. |
+| Esc | Deselect; if nothing is selected, go up one level. |
+| Backspace | Go up one level. |
+| / | Focus the filter. Esc in the filter clears it and returns focus to the map. |
+| O | Toggle Chart / Orbit (chart style only). |
+| H | Toggle hidden files. |
+| ? | Keyboard help overlay. |
+
+The map is drawn larger than the stage that shows it, so the stage is a window
+onto the plate rather than a frame around it. The camera that moves that window
+is shared by every renderer (`app/src/map/viewport.ts`), and so are its
+controls:
+
+| Keys | Action |
+|---|---|
+| Drag / wheel | Pan the plate / zoom about the cursor. |
+| Double-click empty stage | Fit the whole plate in view. |
+| F | Fit to view (also the HUD's ⤢ fit button and "Map: fit to view"). |
+| + / - | Zoom in / out about the middle of the stage. |
+| 0 | Reset the camera to where the system opened. |
+| ← ↑ → ↓ | Pan by 48 px, when the stage has focus. |
+
+Entering a folder re-opens the camera on the new system; selecting a body does
+not move it. Zooming never changes the size of a label: type is drawn at a
+constant size on screen and stays welded to its body's rim.
+
+Tab is captured by the map so the bodies form their own ring of focus stops;
+the explorer column's own controls (filter, hidden, the create row) tab
+normally among themselves.
+
+Inside the explorer's listing:
+
+| Keys | Action |
+|---|---|
+| ↑ / ↓ | Move between rows (one row at a time is a tab stop). |
+| Enter | Open the row's notebook or file, or enter its folder. |
+| Esc | Return focus to the map. |
+
+Arrows move the focus ring only; clicking a row or pressing Enter is what
+changes the selection, so arrowing past a folder never re-lists the column
+underneath you.
+
 ## Global (any focus, unless typing in a text input)
 
 | Keys | Action |

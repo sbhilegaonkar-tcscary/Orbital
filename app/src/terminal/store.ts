@@ -23,7 +23,7 @@ import { create } from 'zustand';
 import type { Terminal } from '@xterm/xterm';
 import type { FitAddon } from '@xterm/addon-fit';
 import type { TerminalConnection } from '../session/types';
-import { useSessionStore } from '../session/store';
+import { connectionMessage, useSessionStore } from '../session/store';
 
 export type TerminalStatus = 'connecting' | 'open' | 'closed';
 
@@ -102,7 +102,7 @@ interface TerminalState {
 
 function requireTerminalsApi() {
   const provider = useSessionStore.getState().provider;
-  if (!provider) throw new Error('Not connected to a session.');
+  if (!provider) throw new Error(connectionMessage());
   return provider.terminals;
 }
 

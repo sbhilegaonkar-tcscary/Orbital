@@ -5,8 +5,9 @@ import { useUiStore, type ViewId } from './uiStore';
 import { useLayoutStore, type DockSide } from './layout';
 import { getRuntime, useTerminalStore } from '../terminal/store';
 import { useTabsStore } from './tabs';
-import { useFilesStore, saveActiveFile } from '../files/store';
+import { useFilesStore, saveActiveFile, revealPath } from '../files/store';
 import { useAgentStore } from '../agent/store';
+import { useSessionStore } from '../session/store';
 
 type Motion = 'system' | 'reduced' | 'full';
 
@@ -162,6 +163,38 @@ registerCommand({
   category: 'Layout',
   shortcut: 'Ctrl+Shift+L',
   run: () => useLayoutStore.getState().toggle('agent'),
+});
+
+// ---- built-in session commands ---------------------------------------------
+//
+// `connect()` is a patient loop, so "Connect" and "Cancel connecting" are two
+// halves of one interaction and never apply at the same time.
+
+registerCommand({
+  id: 'session.connect',
+  title: 'Connect to Jupyter',
+  category: 'Session',
+  when: () => {
+    const { connection } = useSessionStore.getState();
+    return connection !== 'connected' && connection !== 'connecting';
+  },
+  run: () => void useSessionStore.getState().connect(),
+});
+
+registerCommand({
+  id: 'session.cancelConnect',
+  title: 'Cancel connecting',
+  category: 'Session',
+  when: () => useSessionStore.getState().connection === 'connecting',
+  run: () => useSessionStore.getState().cancelConnect(),
+});
+
+registerCommand({
+  id: 'session.disconnect',
+  title: 'Disconnect',
+  category: 'Session',
+  when: () => useSessionStore.getState().connection === 'connected',
+  run: () => void useSessionStore.getState().disconnect(),
 });
 
 // ---- built-in agent commands (M7-B) -----------------------------------
@@ -347,14 +380,7 @@ registerCommand({
   run: () => {
     const active = useTabsStore.getState().activeTab;
     if (!active) return;
-    useLayoutStore.getState().setVisible('files', true);
-    const parts = active.path.split('/');
-    let dir = '';
-    for (let i = 0; i < parts.length - 1; i += 1) {
-      dir = dir ? `${dir}/${parts[i]}` : parts[i];
-      if (!useFilesStore.getState().expanded.includes(dir)) useFilesStore.getState().toggleDir(dir);
-    }
-    useFilesStore.getState().select(active.path);
+    revealPath(active.path);
   },
 });
 

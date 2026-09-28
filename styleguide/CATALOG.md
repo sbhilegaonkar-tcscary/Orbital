@@ -109,6 +109,43 @@ Owner notes: loves Synthwave (keep as a full mode later), moving forward with Ne
 
 ---
 
+## Map directions
+
+The map got a mockup round after its first build — the built map is the
+orbital chart in `app/src/map/` — at the owner's request on 2026-09-27. The
+owner intends to keep the cartography direction as a theme family: each
+theme a different kind of alien cartography, starting with a light pass and
+a dark pass.
+
+| | Variant | Status | Tokens | File |
+|---|---|---|---|---|
+| A | Cartography A · Relic (dark) | built (app/src/map/…) | Bridge / Nebula Drift | `map/cartography-a-relic-dark.html` |
+| B | Cartography B · Vellum (light) | built (app/src/map/…) | Paper / Clinical Terminal | `map/cartography-b-vellum-light.html` |
+| A | Zoom A · Galaxy | built (app/src/map/…) | Bridge + Paper (toggle) | `map/zoom-a-galaxy.html` |
+
+Defining moves:
+
+- **Cartography A · Relic (dark)** — worlds painted with per-character subsurface gradients, blurred atmosphere halos and a gradient terminator, hung on threads of light with glowing glyph beads, inside an orrery ring of 58 stroke-built runes that turns once per ten minutes over the drifting nebula. Hover a world for its plaque; click to enter it (1.6× focus, children fan out as moons); Esc returns.
+- **Cartography B · Vellum (light)** — the identical chart engraved: SVG hatch, crosshatch and stipple patterns for bands, maria and craters, a hatched terminator crescent, dotted compass routes with ink glyph beads, gold leaf (`accent-2`) reserved for the star sigil, the ring system and direction ticks; no glow, no ambient motion. Same interactions.
+- **Zoom A · Galaxy** — Bridge and Paper tokens in one file with a topbar toggle. Three depths plus a fallback: top-level folders as seeded star clusters joined by a cosmic web; click one and one camera group flies in (800 ms) to a system of painted planets, bright notebooks and asteroid files on faint orbits; click a planet for its moon system; beyond depth 3 the folder renders as the plain hairline chart the app uses. Breadcrumb, Esc/Backspace and empty space fly out.
+- **Built Paper cartography (M8.5)** trades Vellum's engraved planets for
+  abstract sigils — astrolabe, rosette, lattice, volvelle,
+  constellation-disc — hatch and stipple only, no realistic bodies, at the
+  owner's request ("more abstract, with no realistic sprites").
+
+Owner notes: Owner's brief: 'something like destiny/destiny 2's map view
+(kinda big planets and cool abstract designs connecting them, so it feels
+more like a fantasy space alien race's artistic interpretation of a map)'
+and 'click to zoom … 3 deep, beyond that just show folders and files
+normally'. Cartography is being kept as a family.
+
+Planned, not built yet:
+
+- C · Jump-route transit map — folders as coloured lines, files as stations, interchanges where files share a stem or import each other; recent work lights its stations; your recent opens run as a train.
+- D · Star atlas — files as stars sized by recency and tinted by type, each folder a constellation figure with its name in small caps, a zodiac band for the last seven days, continuous pan and zoom.
+
+---
+
 ## Shared conventions the E round introduced
 
 These are worth carrying into the real theme system regardless of which variants win:
@@ -128,3 +165,4 @@ These are worth carrying into the real theme system regardless of which variants
 3. Then adjust the four "defining move" areas: topbar, cell chrome, error treatment, running treatment.
 4. Add a card to `index.html` and a row plus a bullet here.
 5. Screenshot at 1280×800 and check nothing clips before showing it.
+6. Map mockups live in `styleguide/map/` and follow the same method; the shared skeleton for the cartography pair is the two files themselves, which differ only in their `:root` block and paint layer.

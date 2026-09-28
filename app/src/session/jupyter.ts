@@ -560,6 +560,7 @@ export class JupyterSessionProvider implements SessionProvider {
             ? (entry.type as 'notebook' | 'directory')
             : 'file',
         lastModified: entry.last_modified,
+        size: entry.size ?? undefined,
       }));
     },
 

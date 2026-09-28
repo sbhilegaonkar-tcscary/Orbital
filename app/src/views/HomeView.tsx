@@ -4,12 +4,12 @@
  * `NotebookView`'s fallback whenever no tab is open — so the owner always
  * has somewhere to land instead of an empty picker.
  */
-import { useSessionStore } from '../session/store';
+import { connectionMessage, useSessionStore } from '../session/store';
 import { useNotebookStore } from '../notebook/store';
-import { useUiStore } from '../shell/uiStore';
 import { useLayoutStore } from '../shell/layout';
 import { runCommand } from '../shell/commands';
 import { useRecent, relativeTime, splitPath } from '../shell/recent';
+import { NotConnectedCard } from '../shell/NotConnectedCard';
 
 export function HomeView() {
   const connection = useSessionStore((s) => s.connection);
@@ -46,22 +46,16 @@ export function HomeView() {
           )}
         </section>
       ) : (
-        <div className="card">
-          <h2>Not connected</h2>
-          <p className="muted">Connect to a Jupyter server to browse and open notebooks.</p>
-          <div className="card-actions">
-            <button type="button" onClick={() => void useSessionStore.getState().connect()}>
-              Connect
-            </button>
-            <button type="button" className="link-button" onClick={() => useUiStore.getState().setView('settings')}>
-              Go to Settings
-            </button>
-          </div>
-        </div>
+        <NotConnectedCard />
       )}
 
       <div className="home-actions">
-        <button type="button" disabled={connection !== 'connected'} onClick={() => runCommand('notebook.newNotebook')}>
+        <button
+          type="button"
+          disabled={connection !== 'connected'}
+          title={connection === 'connected' ? undefined : connectionMessage()}
+          onClick={() => runCommand('notebook.newNotebook')}
+        >
           ＋ New notebook
         </button>
         <button type="button" onClick={() => useLayoutStore.getState().setVisible('files', true)}>

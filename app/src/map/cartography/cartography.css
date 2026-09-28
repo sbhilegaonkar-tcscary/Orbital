@@ -1,0 +1,1288 @@
+/*
+ * Cartography paint. Two modes share one geometry.
+ *
+ * The file is in three parts, the way the mockups are: a SKELETON that sets
+ * weights, sizes and states and names no colour at all; then BRIDGE, the
+ * Relic plate — painted worlds lit from within, atmosphere rims, threads of
+ * light strung with glyph beads, an orrery of alien script turning once every
+ * ten minutes over the sky; then PAPER, the Vellum plate — but with the
+ * owner's abstract sigils in place of engraved planets: astrolabes, rosettes,
+ * lattices, volvelles and constellation discs in hatch and stipple, ink
+ * hairlines, gold leaf spent only on the star and the direction ticks.
+ *
+ * Every colour is a token or a `color-mix()` of tokens. Nothing here is a
+ * literal. Everything is scoped to `.ct-plate` so it cannot reach the rest of
+ * the map, and every paint rule is keyed by `[data-mode]` so Paper and Bridge
+ * never share a value by accident.
+ */
+
+/* ======================================================================
+   SKELETON - geometry, weights, states. No colour below this line until
+   the BRIDGE block.
+   ====================================================================== */
+
+.ct-host {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.ct-plate {
+  display: block;
+  cursor: grab;
+  user-select: none;
+  /*
+   * How much of its nominal size the plate's type is drawn at. The renderer
+   * publishes it from the fit pass: on a stage too small for the composition,
+   * shrinking the plate alone does not help, because a 16 px name is 16 px
+   * whatever the geometry does. Clamped in `layout.ts`, never below 0.74.
+   */
+  --ct-k: 1;
+  /*
+   * 1 / the camera's zoom. Type that can be wrapped in a group is un-zoomed
+   * in the markup instead; this is for the captions that ride a `textPath`
+   * (the belt, the meridian), which cannot be, so they take the factor
+   * through their font size.
+   */
+  --ct-inv-k: 1;
+}
+
+/*
+ * The camera group. Everything drawn sits inside it and knows nothing about
+ * it; `transform-origin: 0 0` is what makes one plate unit one px before the
+ * scale, which is the contract `map/viewport.ts` states. No transition: a
+ * drag writes this on every frame, and the fit glide tweens the camera
+ * itself rather than asking CSS to interpolate the matrix.
+ */
+.ct-plate > .viewport {
+  transform-box: view-box;
+  transform-origin: 0 0;
+  transition: none;
+}
+
+.ct-plate.is-dragging {
+  cursor: grabbing;
+}
+
+.ct-plate text {
+  user-select: none;
+}
+
+/* Hit targets: invisible discs that make a 4 px mote clickable. */
+.ct-hit-disc {
+  fill: transparent;
+  stroke: none;
+}
+
+.ct-hit {
+  cursor: pointer;
+  outline: none;
+}
+
+.ct-hit:focus-visible .ct-hit-disc {
+  stroke-width: 1.5;
+  stroke-dasharray: 3 3;
+}
+
+/* ---- guides ---------------------------------------------------------- */
+.ct-guide-arc {
+  fill: none;
+  stroke-width: 1;
+}
+
+.ct-guide-tick,
+.ct-orrery-tick {
+  stroke-width: 1;
+}
+
+.ct-guide-cap {
+  font: 400 calc(9.5px * var(--ct-k) * var(--ct-inv-k))/1 var(--font-mono);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.ct-dir-tick {
+  fill: none;
+  stroke-width: 1.35;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---- orrery ---------------------------------------------------------- */
+.ct-orrery {
+  transform-box: view-box;
+}
+
+.ct-orrery-ring {
+  fill: none;
+  stroke-width: 1;
+}
+
+.ct-rune {
+  fill: none;
+  stroke-width: 1.05;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---- threads --------------------------------------------------------- */
+.ct-thread-core {
+  fill: none;
+  stroke-width: 1.15;
+}
+
+.ct-thread-flow {
+  fill: none;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+.ct-bead {
+  fill: none;
+  stroke-width: 1.05;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ct-bead-dot {
+  stroke: none;
+}
+
+/* ---- belt ------------------------------------------------------------ */
+.ct-belt-path {
+  fill: none;
+  stroke-width: 1;
+}
+
+.ct-belt-tick {
+  stroke-width: 1;
+}
+
+.ct-mote {
+  stroke-width: 0.8;
+}
+
+.ct-belt-cap {
+  font: 400 calc(9.5px * var(--ct-k) * var(--ct-inv-k))/1 var(--font-mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+/* ---- star ------------------------------------------------------------ */
+.ct-star-ring {
+  fill: none;
+  stroke-width: 1.1;
+}
+
+.ct-star-ray {
+  stroke-width: 1.1;
+  stroke-linecap: round;
+}
+
+.ct-star-glyph {
+  fill: none;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ct-star-name {
+  font: 600 calc(13px * var(--ct-k))/1 var(--font-display);
+  letter-spacing: 0.15em;
+  text-anchor: middle;
+}
+
+.ct-star-sub {
+  font: 400 calc(10px * var(--ct-k))/1 var(--font-mono);
+  letter-spacing: 0.18em;
+  text-anchor: middle;
+}
+
+/* ---- inner court ----------------------------------------------------- */
+.ct-nb-body {
+  stroke-width: 1;
+}
+
+.ct-nb-halo {
+  fill: none;
+  stroke-width: 1.1;
+  opacity: 0;
+}
+
+.ct-nb.is-open .ct-nb-halo,
+.ct-nb.is-busy .ct-nb-halo,
+.ct-nb.is-dirty .ct-nb-halo {
+  opacity: 1;
+}
+
+.ct-nb .ct-nb-halo.is-second {
+  opacity: 0;
+}
+
+.ct-nb.is-active .ct-nb-halo.is-second {
+  opacity: 1;
+}
+
+.ct-nb-lead {
+  fill: none;
+  stroke-width: 1;
+}
+
+.ct-nb-term {
+  stroke-width: 1;
+}
+
+.ct-nb-label {
+  font: 400 calc(10.5px * var(--ct-k))/1 var(--font-mono);
+}
+
+/* Only the court captions the plate budgeted for are drawn; the rest wait
+   for a hover or a selection, which costs no layout. */
+.ct-nb .ct-nb-cap {
+  opacity: 0;
+}
+
+.ct-nb.is-labelled .ct-nb-cap,
+.ct-nb.is-hovered .ct-nb-cap,
+.ct-nb.is-selected .ct-nb-cap,
+.ct-nb.match .ct-nb-cap {
+  opacity: 1;
+}
+
+/* ---- worlds ---------------------------------------------------------- */
+.ct-w-atmo {
+  stroke: none;
+}
+
+.ct-w-rim {
+  fill: none;
+  stroke-width: 1.4;
+}
+
+.ct-w-term {
+  stroke: none;
+}
+
+.ct-w-lead {
+  fill: none;
+  stroke-width: 1;
+}
+
+.ct-w-sq {
+  stroke-width: 1;
+}
+
+.ct-w-name {
+  font: 600 calc(16px * var(--ct-k))/1 var(--font-display);
+  letter-spacing: 0.035em;
+}
+
+.ct-w-cap {
+  font: 400 calc(11px * var(--ct-k))/1 var(--font-mono);
+}
+
+.ct-w-ring {
+  fill: none;
+  stroke-width: 1.2;
+}
+
+.ct-w-ringfront {
+  fill: none;
+  stroke-width: 2;
+}
+
+.ct-band,
+.ct-storm,
+.ct-storm-eye,
+.ct-cap-ice,
+.ct-maria,
+.ct-crater-o,
+.ct-crater-i,
+.ct-w-base {
+  stroke: none;
+}
+
+.ct-storm-swirl {
+  fill: none;
+  stroke-width: 1.1;
+}
+
+/* ---- paper sigils ---------------------------------------------------- */
+.ct-sg-ring,
+.ct-sg-ring-2,
+.ct-sg-rete,
+.ct-sg-mesh,
+.ct-sg-petal,
+.ct-sg-barb,
+.ct-sg-link,
+.ct-sg-cell {
+  fill: none;
+}
+
+.ct-sg-ring {
+  stroke-width: 1.3;
+}
+
+.ct-sg-ring-2,
+.ct-sg-rete {
+  stroke-width: 0.9;
+}
+
+.ct-sg-tick,
+.ct-sg-fringe,
+.ct-sg-bar {
+  stroke-width: 0.75;
+}
+
+.ct-sg-tick-major {
+  stroke-width: 1.15;
+}
+
+.ct-sg-mesh,
+.ct-sg-cell {
+  stroke-width: 0.6;
+  stroke-linejoin: round;
+}
+
+.ct-sg-petal {
+  stroke-width: 0.85;
+  stroke-linejoin: round;
+}
+
+.ct-sg-barb,
+.ct-sg-arm {
+  stroke-width: 1.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+.ct-sg-rune {
+  fill: none;
+  stroke-width: 0.8;
+  stroke-linecap: round;
+}
+
+.ct-sg-link {
+  stroke-width: 0.9;
+  stroke-linejoin: round;
+  stroke-dasharray: 5 3;
+}
+
+.ct-sg-star,
+.ct-sg-hub,
+.ct-sg-plate,
+.ct-sg-sector {
+  stroke: none;
+}
+
+.ct-sg-sector {
+  stroke-width: 0.6;
+}
+
+/* ---- moons ----------------------------------------------------------- */
+.ct-moons {
+  pointer-events: none;
+}
+
+.ct-moons .ct-moon {
+  pointer-events: all;
+}
+
+.ct-moon-orbit {
+  fill: none;
+  stroke-width: 1;
+  stroke-dasharray: 3 6;
+}
+
+.ct-moon-lead {
+  fill: none;
+  stroke-width: 0.8;
+}
+
+.ct-moon-dot {
+  stroke-width: 1;
+}
+
+.ct-moon-label {
+  font: 400 calc(9.5px * var(--ct-k))/1 var(--font-mono);
+}
+
+.ct-moon.is-selected .ct-moon-dot {
+  stroke-width: 2.2;
+}
+
+/* ---- selection is focus ----------------------------------------------- */
+.ct-slot {
+  transform-box: view-box;
+  transform-origin: var(--ox) var(--oy);
+}
+
+.ct-plate.has-focus .ct-bg {
+  opacity: 0.1;
+}
+
+.ct-plate.has-focus .ct-slot:not(.is-focused) {
+  opacity: 0.15;
+}
+
+.ct-plate.has-focus .ct-slot:not(.is-focused) .ct-w-label {
+  opacity: 0;
+}
+
+.ct-slot.is-focused {
+  transform: translate(var(--fx), var(--fy)) scale(1.4);
+}
+
+/* The filter dims what it does not match and thickens what it does. */
+.ct-plate.is-filtering .dim {
+  opacity: 0.22;
+}
+
+.ct-plate.is-filtering .match .ct-w-rim,
+.ct-plate.is-filtering .match .ct-nb-body {
+  stroke-width: 2.4;
+}
+
+/* Nothing to draw from: say so by fading, not by disappearing. */
+.ct-plate.is-offline {
+  opacity: 0.3;
+}
+
+.ct-mote.is-derelict {
+  opacity: 0.8;
+}
+
+:root:not([data-motion='reduced']) .ct-slot,
+:root:not([data-motion='reduced']) .ct-bg,
+:root:not([data-motion='reduced']) .ct-w-label,
+:root:not([data-motion='reduced']) .ct-moons {
+  transition:
+    transform 350ms cubic-bezier(0.22, 0.72, 0.2, 1),
+    opacity 350ms ease;
+}
+
+@keyframes ct-orrery-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ct-thread-flow {
+  to {
+    stroke-dashoffset: -96;
+  }
+}
+
+@keyframes ct-core-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* ======================================================================
+   BRIDGE - the Relic plate.
+   ====================================================================== */
+
+[data-mode='bridge'] .ct-plate {
+  /* Five painted characters: lit face, mid body, deep limb, rim light.
+     Derived from the mode's own tokens, so a skin change repaints them. */
+  --w0-lit: color-mix(in srgb, var(--accent) 55%, var(--text));
+  --w0-mid: color-mix(in srgb, var(--accent) 62%, var(--bg));
+  --w0-deep: color-mix(in srgb, var(--accent) 18%, var(--bg));
+  --w0-rim: var(--accent);
+
+  --w1-lit: color-mix(in srgb, var(--warning) 60%, var(--text));
+  --w1-mid: color-mix(in srgb, var(--danger) 62%, var(--bg));
+  --w1-deep: color-mix(in srgb, var(--danger) 16%, var(--bg));
+  --w1-rim: var(--warning);
+
+  --w2-lit: color-mix(in srgb, var(--text) 82%, var(--accent));
+  --w2-mid: color-mix(in srgb, var(--accent) 45%, var(--surface-2));
+  --w2-deep: color-mix(in srgb, var(--accent) 14%, var(--bg));
+  --w2-rim: color-mix(in srgb, var(--accent) 60%, var(--text));
+
+  --w3-lit: color-mix(in srgb, var(--accent-2) 45%, var(--text));
+  --w3-mid: color-mix(in srgb, var(--accent-2) 66%, var(--bg));
+  --w3-deep: color-mix(in srgb, var(--accent-2) 18%, var(--bg));
+  --w3-rim: var(--accent-2);
+
+  --w4-lit: color-mix(in srgb, var(--text) 78%, var(--border));
+  --w4-mid: color-mix(in srgb, var(--text-muted) 62%, var(--bg));
+  --w4-deep: color-mix(in srgb, var(--text-muted) 16%, var(--bg));
+  --w4-rim: color-mix(in srgb, var(--text-muted) 85%, var(--text));
+}
+
+[data-mode='bridge'] .ct-c0 {
+  --wl: var(--w0-lit);
+  --wm: var(--w0-mid);
+  --wd: var(--w0-deep);
+  --wr: var(--w0-rim);
+}
+
+[data-mode='bridge'] .ct-c1 {
+  --wl: var(--w1-lit);
+  --wm: var(--w1-mid);
+  --wd: var(--w1-deep);
+  --wr: var(--w1-rim);
+}
+
+[data-mode='bridge'] .ct-c2 {
+  --wl: var(--w2-lit);
+  --wm: var(--w2-mid);
+  --wd: var(--w2-deep);
+  --wr: var(--w2-rim);
+}
+
+[data-mode='bridge'] .ct-c3 {
+  --wl: var(--w3-lit);
+  --wm: var(--w3-mid);
+  --wd: var(--w3-deep);
+  --wr: var(--w3-rim);
+}
+
+[data-mode='bridge'] .ct-c4 {
+  --wl: var(--w4-lit);
+  --wm: var(--w4-mid);
+  --wd: var(--w4-deep);
+  --wr: var(--w4-rim);
+}
+
+[data-mode='bridge'] .ct-s0a { stop-color: var(--w0-lit); }
+[data-mode='bridge'] .ct-s0b { stop-color: var(--w0-mid); }
+[data-mode='bridge'] .ct-s0c { stop-color: var(--w0-deep); }
+[data-mode='bridge'] .ct-s1a { stop-color: var(--w1-lit); }
+[data-mode='bridge'] .ct-s1b { stop-color: var(--w1-mid); }
+[data-mode='bridge'] .ct-s1c { stop-color: var(--w1-deep); }
+[data-mode='bridge'] .ct-s2a { stop-color: var(--w2-lit); }
+[data-mode='bridge'] .ct-s2b { stop-color: var(--w2-mid); }
+[data-mode='bridge'] .ct-s2c { stop-color: var(--w2-deep); }
+[data-mode='bridge'] .ct-s3a { stop-color: var(--w3-lit); }
+[data-mode='bridge'] .ct-s3b { stop-color: var(--w3-mid); }
+[data-mode='bridge'] .ct-s3c { stop-color: var(--w3-deep); }
+[data-mode='bridge'] .ct-s4a { stop-color: var(--w4-lit); }
+[data-mode='bridge'] .ct-s4b { stop-color: var(--w4-mid); }
+[data-mode='bridge'] .ct-s4c { stop-color: var(--w4-deep); }
+
+[data-mode='bridge'] .ct-term-a {
+  stop-color: transparent;
+}
+
+[data-mode='bridge'] .ct-term-b {
+  stop-color: var(--bg);
+  stop-opacity: 0.88;
+}
+
+/* ---- guides and orrery ---- */
+[data-mode='bridge'] .ct-guide-arc {
+  stroke: color-mix(in srgb, var(--accent) 22%, transparent);
+  stroke-dasharray: 2 7;
+}
+
+[data-mode='bridge'] .ct-guide-arc.ct-meridian {
+  stroke: color-mix(in srgb, var(--accent-2) 30%, transparent);
+  stroke-dasharray: 20 6 3 6;
+}
+
+[data-mode='bridge'] .ct-guide-cap {
+  fill: color-mix(in srgb, var(--text-muted) 75%, transparent);
+}
+
+[data-mode='bridge'] .ct-guide-tick,
+[data-mode='bridge'] .ct-orrery-tick {
+  stroke: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+[data-mode='bridge'] .ct-orrery-ring {
+  stroke: color-mix(in srgb, var(--accent-2) 26%, transparent);
+}
+
+[data-mode='bridge'] .ct-rune {
+  stroke: color-mix(in srgb, var(--accent-2) 55%, transparent);
+}
+
+[data-mode='bridge'] .ct-dir-tick {
+  stroke: var(--warning);
+}
+
+/* ---- threads ---- */
+[data-mode='bridge'] .ct-thread-core {
+  stroke: color-mix(in srgb, var(--accent) 52%, transparent);
+}
+
+[data-mode='bridge'] .t-wake .ct-thread-core {
+  stroke: color-mix(in srgb, var(--accent-2) 52%, transparent);
+  stroke-dasharray: 9 5;
+}
+
+[data-mode='bridge'] .ct-thread-flow {
+  stroke: var(--accent);
+  stroke-dasharray: 2 14;
+  filter: drop-shadow(0 0 5px var(--accent));
+}
+
+[data-mode='bridge'] .t-wake .ct-thread-flow {
+  stroke: var(--accent-2);
+  filter: drop-shadow(0 0 5px var(--accent-2));
+}
+
+[data-mode='bridge'] .ct-bead {
+  stroke: color-mix(in srgb, var(--accent) 80%, transparent);
+}
+
+[data-mode='bridge'] .t-wake .ct-bead {
+  stroke: color-mix(in srgb, var(--accent-2) 80%, transparent);
+}
+
+[data-mode='bridge'] .ct-bead-dot {
+  fill: var(--text);
+}
+
+[data-mode='bridge'] .ct-bead-g {
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 60%, transparent));
+}
+
+[data-mode='bridge'] .t-wake .ct-bead-g {
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent-2) 60%, transparent));
+}
+
+[data-mode='bridge'] .ct-bead-run .ct-bead-dot {
+  fill: var(--accent);
+}
+
+[data-mode='bridge'] .t-wake .ct-bead-run .ct-bead-dot {
+  fill: var(--accent-2);
+}
+
+/* ---- belt ---- */
+[data-mode='bridge'] .ct-belt-path {
+  stroke: color-mix(in srgb, var(--accent-2) 30%, transparent);
+  stroke-dasharray: 14 6 2 6;
+}
+
+[data-mode='bridge'] .ct-belt-tick {
+  stroke: color-mix(in srgb, var(--accent-2) 30%, transparent);
+}
+
+[data-mode='bridge'] .ct-mote {
+  fill: color-mix(in srgb, var(--text) 62%, transparent);
+  stroke: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+[data-mode='bridge'] .ct-mote.is-derelict {
+  fill: color-mix(in srgb, var(--text-muted) 40%, transparent);
+  stroke: none;
+}
+
+[data-mode='bridge'] .ct-belt-cap {
+  fill: color-mix(in srgb, var(--text-muted) 80%, transparent);
+}
+
+/* ---- star ---- */
+[data-mode='bridge'] .ct-star {
+  filter: drop-shadow(0 0 22px color-mix(in srgb, var(--accent) 22%, transparent));
+}
+
+[data-mode='bridge'] .ct-star-ring {
+  stroke: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+[data-mode='bridge'] .ct-star-ring.is-dashed {
+  stroke: color-mix(in srgb, var(--accent-2) 60%, transparent);
+  stroke-dasharray: 3 5;
+}
+
+[data-mode='bridge'] .ct-star-ray {
+  stroke: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+[data-mode='bridge'] .ct-star-ray.is-long {
+  stroke: color-mix(in srgb, var(--accent-2) 65%, transparent);
+}
+
+[data-mode='bridge'] .ct-star-glyph {
+  stroke: var(--accent);
+  filter: drop-shadow(0 0 6px var(--accent));
+}
+
+[data-mode='bridge'] .ct-star-core {
+  fill: var(--text);
+  filter: drop-shadow(0 0 9px var(--accent));
+}
+
+[data-mode='bridge'] .ct-plate.is-busy .ct-star-core {
+  fill: var(--warning);
+}
+
+[data-mode='bridge'] .ct-star-name {
+  fill: var(--text);
+}
+
+[data-mode='bridge'] .ct-star-sub {
+  fill: color-mix(in srgb, var(--text-muted) 85%, transparent);
+}
+
+/* ---- court ---- */
+[data-mode='bridge'] .ct-nb-body {
+  fill: var(--accent);
+  stroke: color-mix(in srgb, var(--text) 70%, transparent);
+  filter: drop-shadow(0 0 7px var(--accent));
+}
+
+[data-mode='bridge'] .ct-nb.band-older .ct-nb-body {
+  fill: color-mix(in srgb, var(--text-muted) 55%, transparent);
+  filter: none;
+  stroke: none;
+}
+
+[data-mode='bridge'] .ct-nb-halo {
+  stroke: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+[data-mode='bridge'] .ct-nb-halo.is-second {
+  stroke: color-mix(in srgb, var(--accent-2) 55%, transparent);
+}
+
+[data-mode='bridge'] .ct-nb.is-busy .ct-nb-halo {
+  stroke: color-mix(in srgb, var(--warning) 70%, transparent);
+  stroke-dasharray: 4 4;
+}
+
+[data-mode='bridge'] .ct-nb.is-dirty .ct-nb-halo {
+  stroke: color-mix(in srgb, var(--warning) 55%, transparent);
+}
+
+[data-mode='bridge'] .ct-nb.is-error .ct-nb-halo {
+  stroke: color-mix(in srgb, var(--danger) 75%, transparent);
+}
+
+[data-mode='bridge'] .ct-nb-lead {
+  stroke: color-mix(in srgb, var(--border) 90%, transparent);
+}
+
+[data-mode='bridge'] .ct-nb-term {
+  fill: color-mix(in srgb, var(--accent) 65%, transparent);
+}
+
+[data-mode='bridge'] .ct-nb-label {
+  fill: color-mix(in srgb, var(--text) 82%, transparent);
+}
+
+/* ---- painted worlds ---- */
+[data-mode='bridge'] .ct-w-atmo {
+  fill: var(--wr);
+  opacity: 0.3;
+  filter: blur(11px);
+}
+
+[data-mode='bridge'] .ct-w-rim {
+  stroke: var(--wr);
+  filter: drop-shadow(0 0 8px var(--wr));
+}
+
+[data-mode='bridge'] .ct-w-term-c {
+  fill: none;
+}
+
+[data-mode='bridge'] .ct-band.ct-b0 {
+  fill: color-mix(in srgb, var(--wl) 26%, transparent);
+}
+
+[data-mode='bridge'] .ct-band.ct-b1 {
+  fill: color-mix(in srgb, var(--wd) 40%, transparent);
+}
+
+[data-mode='bridge'] .ct-band.ct-b2 {
+  fill: color-mix(in srgb, var(--wl) 13%, transparent);
+}
+
+[data-mode='bridge'] .ct-band.ct-b3 {
+  fill: color-mix(in srgb, var(--wm) 38%, transparent);
+}
+
+[data-mode='bridge'] .ct-storm {
+  fill: color-mix(in srgb, var(--wl) 45%, transparent);
+}
+
+[data-mode='bridge'] .ct-storm-eye {
+  fill: color-mix(in srgb, var(--wl) 82%, transparent);
+}
+
+[data-mode='bridge'] .ct-storm-swirl {
+  stroke: color-mix(in srgb, var(--wl) 55%, transparent);
+}
+
+[data-mode='bridge'] .ct-cap-ice {
+  fill: color-mix(in srgb, var(--wl) 72%, transparent);
+}
+
+[data-mode='bridge'] .ct-maria {
+  fill: color-mix(in srgb, var(--wd) 52%, transparent);
+}
+
+[data-mode='bridge'] .ct-crater-o {
+  fill: color-mix(in srgb, var(--wd) 62%, transparent);
+}
+
+[data-mode='bridge'] .ct-crater-i {
+  fill: color-mix(in srgb, var(--wl) 16%, transparent);
+}
+
+[data-mode='bridge'] .ct-w-ring {
+  stroke: color-mix(in srgb, var(--wr) 55%, transparent);
+}
+
+[data-mode='bridge'] .ct-w-ringfront {
+  stroke: color-mix(in srgb, var(--wr) 85%, transparent);
+  filter: drop-shadow(0 0 6px var(--wr));
+}
+
+[data-mode='bridge'] .ct-w-lead {
+  stroke: color-mix(in srgb, var(--border) 95%, transparent);
+}
+
+[data-mode='bridge'] .ct-w-sq {
+  fill: var(--wr);
+}
+
+[data-mode='bridge'] .ct-w-name {
+  fill: var(--text);
+}
+
+[data-mode='bridge'] .ct-w-cap {
+  fill: color-mix(in srgb, var(--text-muted) 92%, transparent);
+}
+
+[data-mode='bridge'] .ct-world.is-hovered .ct-w-rim,
+[data-mode='bridge'] .ct-world.is-selected .ct-w-rim {
+  stroke-width: 2.2;
+  filter: drop-shadow(0 0 16px var(--wr));
+}
+
+[data-mode='bridge'] .ct-world.is-hovered .ct-w-atmo,
+[data-mode='bridge'] .ct-world.is-selected .ct-w-atmo {
+  opacity: 0.5;
+}
+
+[data-mode='bridge'] .ct-world.is-hovered .ct-w-name {
+  fill: var(--wr);
+}
+
+[data-mode='bridge'] .ct-hit:focus-visible .ct-hit-disc {
+  stroke: var(--accent);
+}
+
+/* ---- moons ---- */
+[data-mode='bridge'] .ct-moon-orbit {
+  stroke: color-mix(in srgb, var(--wr) 34%, transparent);
+}
+
+[data-mode='bridge'] .ct-moon-lead {
+  stroke: color-mix(in srgb, var(--wr) 45%, transparent);
+}
+
+[data-mode='bridge'] .ct-moon-dot {
+  fill: var(--wr);
+  stroke: color-mix(in srgb, var(--bg) 60%, transparent);
+  filter: drop-shadow(0 0 5px var(--wr));
+}
+
+[data-mode='bridge'] .m-directory .ct-moon-dot {
+  fill: var(--accent-2);
+}
+
+[data-mode='bridge'] .m-file .ct-moon-dot {
+  fill: color-mix(in srgb, var(--text-muted) 90%, transparent);
+  filter: none;
+}
+
+[data-mode='bridge'] .ct-moon.is-selected .ct-moon-dot {
+  stroke: var(--text);
+}
+
+[data-mode='bridge'] .ct-moon-label {
+  fill: color-mix(in srgb, var(--text) 88%, transparent);
+}
+
+[data-mode='bridge'] .ct-moon.is-selected .ct-moon-label {
+  fill: var(--text);
+}
+
+/* ---- ambient motion: bridge only, and only when motion is allowed ---- */
+:root:not([data-motion='reduced']) [data-mode='bridge'] .ct-orrery {
+  animation: ct-orrery-turn 600s linear infinite;
+}
+
+:root:not([data-motion='reduced']) [data-mode='bridge'] .ct-thread-flow {
+  animation: ct-thread-flow 9s linear infinite;
+}
+
+:root:not([data-motion='reduced']) [data-mode='bridge'] .ct-star-core {
+  animation: ct-core-pulse 4.5s ease-in-out infinite;
+}
+
+/* ======================================================================
+   PAPER - the Vellum plate, with abstract sigils instead of planets.
+   Ink hairlines, hatch and stipple, gold leaf only on the star sigil and
+   the direction ticks. No glow anywhere, no gradient, no terminator.
+   ====================================================================== */
+
+[data-mode='paper'] .ct-plate {
+  /* Three ink weights, mixed from the mode's own text tokens. */
+  --ink-1: var(--text);
+  --ink-2: var(--text-muted);
+  --ink-3: color-mix(in srgb, var(--text-muted) 45%, var(--bg));
+}
+
+[data-mode='paper'] .ct-hatch {
+  stroke: var(--ink-1);
+  stroke-width: 0.65;
+}
+
+[data-mode='paper'] .ct-dot {
+  fill: var(--ink-1);
+}
+
+/* ---- guides and orrery ---- */
+[data-mode='paper'] .ct-guide-arc {
+  stroke: var(--ink-3);
+  stroke-dasharray: 2 6;
+}
+
+[data-mode='paper'] .ct-guide-arc.ct-meridian {
+  stroke: var(--ink-3);
+  stroke-dasharray: 18 5 2 5;
+}
+
+[data-mode='paper'] .ct-guide-cap {
+  fill: var(--ink-3);
+}
+
+[data-mode='paper'] .ct-guide-tick,
+[data-mode='paper'] .ct-orrery-tick {
+  stroke: var(--ink-2);
+}
+
+[data-mode='paper'] .ct-orrery-ring {
+  stroke: var(--ink-3);
+}
+
+[data-mode='paper'] .ct-rune {
+  stroke: var(--ink-2);
+}
+
+/* Gold leaf, first of two places. */
+[data-mode='paper'] .ct-dir-tick {
+  stroke: var(--accent-2);
+  stroke-width: 1.6;
+}
+
+/* ---- threads: compass arcs and dotted routes ---- */
+[data-mode='paper'] .ct-thread-core {
+  stroke: var(--ink-2);
+}
+
+[data-mode='paper'] .t-wake .ct-thread-core {
+  stroke: var(--ink-3);
+  stroke-dasharray: 10 4;
+}
+
+[data-mode='paper'] .ct-thread-flow {
+  stroke: var(--ink-2);
+  stroke-dasharray: 0.1 6;
+  stroke-width: 1.6;
+}
+
+[data-mode='paper'] .t-wake .ct-thread-flow {
+  stroke: var(--ink-3);
+}
+
+[data-mode='paper'] .ct-bead {
+  stroke: var(--ink-1);
+}
+
+[data-mode='paper'] .t-wake .ct-bead {
+  stroke: var(--ink-2);
+}
+
+[data-mode='paper'] .ct-bead-dot {
+  fill: var(--ink-1);
+}
+
+/* Nothing crawls on a printed plate. */
+[data-mode='paper'] .ct-bead-run {
+  display: none;
+}
+
+/* ---- belt ---- */
+[data-mode='paper'] .ct-belt-path {
+  stroke: var(--ink-2);
+  stroke-dasharray: 12 5 2 5;
+}
+
+[data-mode='paper'] .ct-belt-tick {
+  stroke: var(--ink-3);
+}
+
+[data-mode='paper'] .ct-mote {
+  fill: var(--ink-1);
+  stroke: none;
+}
+
+[data-mode='paper'] .ct-mote.is-derelict {
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 0.9;
+}
+
+[data-mode='paper'] .ct-belt-cap {
+  fill: var(--ink-2);
+}
+
+/* ---- the star sigil: where the gold leaf gathers ---- */
+[data-mode='paper'] .ct-star-ring {
+  stroke: var(--accent-2);
+}
+
+[data-mode='paper'] .ct-star-ring.is-dashed {
+  stroke: var(--ink-2);
+  stroke-dasharray: 3 4;
+}
+
+[data-mode='paper'] .ct-star-ray {
+  stroke: var(--ink-2);
+}
+
+[data-mode='paper'] .ct-star-ray.is-long {
+  stroke: var(--accent-2);
+}
+
+[data-mode='paper'] .ct-star-glyph {
+  stroke: var(--accent-2);
+  stroke-width: 1.6;
+}
+
+[data-mode='paper'] .ct-star-core {
+  fill: var(--accent-2);
+}
+
+[data-mode='paper'] .ct-star-name {
+  fill: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: calc(12px * var(--ct-k));
+}
+
+[data-mode='paper'] .ct-star-sub {
+  fill: var(--text-muted);
+}
+
+/* ---- court ---- */
+[data-mode='paper'] .ct-nb-body {
+  fill: var(--surface);
+  stroke: var(--ink-1);
+  stroke-width: 1.3;
+}
+
+[data-mode='paper'] .ct-nb.is-active .ct-nb-body {
+  fill: var(--ink-1);
+}
+
+[data-mode='paper'] .ct-nb.is-dirty .ct-nb-body {
+  fill: var(--ink-3);
+}
+
+[data-mode='paper'] .ct-nb.band-older .ct-nb-body {
+  stroke: var(--ink-3);
+  stroke-dasharray: 2 2;
+}
+
+[data-mode='paper'] .ct-nb-halo {
+  stroke: var(--ink-2);
+}
+
+[data-mode='paper'] .ct-nb-halo.is-second {
+  stroke: var(--accent-2);
+}
+
+[data-mode='paper'] .ct-nb.is-busy .ct-nb-halo {
+  stroke-dasharray: 3 3;
+}
+
+[data-mode='paper'] .ct-nb.is-error .ct-nb-halo {
+  stroke: var(--danger);
+}
+
+[data-mode='paper'] .ct-nb-lead {
+  stroke: var(--ink-3);
+}
+
+[data-mode='paper'] .ct-nb-term {
+  fill: var(--accent-2);
+}
+
+[data-mode='paper'] .ct-nb-label {
+  fill: var(--text);
+}
+
+[data-mode='paper'] .ct-nb.band-older .ct-nb-label {
+  fill: var(--text-muted);
+}
+
+/* ---- sigils ---- */
+[data-mode='paper'] .ct-w-atmo,
+[data-mode='paper'] .ct-w-term,
+[data-mode='paper'] .ct-w-term-c {
+  display: none;
+}
+
+/* The cartouche's ground: paper, not a planet. */
+[data-mode='paper'] .ct-w-base {
+  fill: var(--surface);
+}
+
+[data-mode='paper'] .ct-w-rim {
+  stroke: var(--ink-1);
+  stroke-width: 1.5;
+}
+
+[data-mode='paper'] .ct-sg-ring {
+  stroke: var(--ink-1);
+}
+
+[data-mode='paper'] .ct-sg-ring-2 {
+  stroke: var(--ink-2);
+}
+
+[data-mode='paper'] .ct-sg-tick,
+[data-mode='paper'] .ct-sg-fringe {
+  stroke: var(--ink-2);
+}
+
+[data-mode='paper'] .ct-sg-tick-major {
+  stroke: var(--ink-1);
+}
+
+[data-mode='paper'] .ct-sg-bar {
+  stroke: var(--ink-2);
+}
+
+[data-mode='paper'] .ct-sg-rete {
+  stroke: var(--ink-1);
+}
+
+[data-mode='paper'] .ct-sg-barb {
+  stroke: var(--ink-1);
+}
+
+[data-mode='paper'] .ct-sg-petal {
+  stroke: var(--ink-1);
+}
+
+[data-mode='paper'] .ct-sg-mesh {
+  stroke: var(--ink-2);
+}
+
+[data-mode='paper'] .ct-sg-cell {
+  stroke: var(--ink-1);
+}
+
+[data-mode='paper'] .ct-sg-arm {
+  stroke: var(--ink-1);
+}
+
+[data-mode='paper'] .ct-sg-rune {
+  stroke: var(--ink-2);
+}
+
+[data-mode='paper'] .ct-sg-link {
+  stroke: var(--ink-2);
+}
+
+[data-mode='paper'] .ct-sg-star {
+  fill: var(--ink-1);
+}
+
+[data-mode='paper'] .ct-sg-hub {
+  fill: var(--ink-1);
+}
+
+[data-mode='paper'] .ct-sg-plate,
+[data-mode='paper'] .ct-sg-sector {
+  stroke: none;
+}
+
+[data-mode='paper'] .ct-w-lead {
+  stroke: var(--ink-2);
+}
+
+[data-mode='paper'] .ct-w-sq {
+  fill: var(--ink-1);
+}
+
+[data-mode='paper'] .ct-w-name {
+  fill: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  font-size: calc(13.5px * var(--ct-k));
+  font-weight: 600;
+}
+
+[data-mode='paper'] .ct-w-cap {
+  fill: var(--text-muted);
+}
+
+[data-mode='paper'] .ct-world.is-hovered .ct-w-rim,
+[data-mode='paper'] .ct-world.is-selected .ct-w-rim {
+  stroke-width: 3;
+}
+
+[data-mode='paper'] .ct-world.is-hovered .ct-w-name {
+  fill: var(--accent);
+}
+
+[data-mode='paper'] .ct-hit:focus-visible .ct-hit-disc {
+  stroke: var(--accent);
+}
+
+/* ---- moons ---- */
+[data-mode='paper'] .ct-moon-orbit {
+  stroke: var(--ink-3);
+  stroke-dasharray: 3 5;
+}
+
+[data-mode='paper'] .ct-moon-lead {
+  stroke: var(--ink-3);
+}
+
+[data-mode='paper'] .ct-moon-dot {
+  fill: var(--surface);
+  stroke: var(--ink-1);
+  stroke-width: 1.2;
+}
+
+[data-mode='paper'] .m-directory .ct-moon-dot {
+  fill: var(--accent-2);
+  stroke: var(--accent-2);
+}
+
+[data-mode='paper'] .m-notebook .ct-moon-dot {
+  fill: var(--ink-1);
+}
+
+[data-mode='paper'] .m-file .ct-moon-dot {
+  fill: var(--surface);
+  stroke: var(--ink-2);
+}
+
+[data-mode='paper'] .ct-moon.is-selected .ct-moon-dot {
+  stroke: var(--accent);
+}
+
+[data-mode='paper'] .ct-moon-label {
+  fill: var(--text);
+}

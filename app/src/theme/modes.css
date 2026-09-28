@@ -90,9 +90,9 @@
   clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
 }
 
-/* ---- paper & night-ops: no ambient motion ----------------------------------- */
-[data-mode='paper'] *,
-[data-mode='night-ops'] * {
+/* ---- paper & night-ops: no ambient motion (the connection progress sweep is feedback, not ambience) -- */
+[data-mode='paper'] *:not(.connect-bar-sweep),
+[data-mode='night-ops'] *:not(.connect-bar-sweep) {
   animation: none !important;
 }
 
@@ -122,10 +122,19 @@
 }
 
 [data-mode='bridge'] .card,
-[data-mode='bridge'] .skin-popover {
+[data-mode='bridge'] .skin-popover,
+[data-mode='bridge'] .map-panel {
   background: var(--panel);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+}
+
+/* The map IS the background in bridge: the sky has to reach it, so the center
+   column drops its own panel treatment while a map is in it (map/map.css). */
+[data-mode='bridge'] .center-column:has(.map-view) {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 [data-mode='bridge'] .topbar-logo {

@@ -1,0 +1,1035 @@
+/*
+ * Map styling. Tokens only — every colour is a `var(--token)` or a
+ * `color-mix()` of one, so the same geometry reads correctly in all four
+ * modes and every skin. Nothing here sets a literal colour, font, radius or
+ * shadow.
+ *
+ * Two attributes on the SVG drive the presentation:
+ *   data-map-mode   chart | orbit   which instrument is drawn (star glyph, dashes)
+ *   data-map-motion frozen | orbit  whether anything is actually moving
+ * They differ under reduced motion, which freezes Orbit into the Chart layout
+ * while keeping Orbit's drawing.
+ */
+
+/* ---- layout ---------------------------------------------------------------- */
+/* The view is a flex row: the renderer's stage, then the explorer column. The
+   breakpoint is about how much room the *map* has, not the window — at 800px
+   wide with the inspector open the map is ~520px — so it is a container query
+   on this element, not a media query. */
+.map-view {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+  overflow: hidden;
+  outline: none;
+  container-type: inline-size;
+  container-name: map;
+}
+
+/* The renderer fills this; only the breadcrumb and the legend overlay it. */
+.map-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.map-canvas {
+  position: absolute;
+  inset: 0;
+
+  /* 1 / the viewport's k, written on the `<svg>` by `ChartMap`. The default
+     keeps the sheet correct wherever the camera has not been applied yet. */
+  --inv-k: 1;
+}
+
+.map-svg {
+  display: block;
+  user-select: none;
+  /* The chart is something you drag. `useViewport` adds `is-dragging` on the
+     element itself the moment a press crosses the threshold. */
+  cursor: grab;
+}
+
+.map-svg.is-dragging,
+.map-svg.is-dragging .map-body {
+  cursor: grabbing;
+}
+
+/* The user's pan and zoom, one transform, on a group outside the dive
+   transition. `screen = world * k + (x, y)` only holds with the origin at the
+   view box's own 0,0. */
+.map-canvas .viewport {
+  transform-box: view-box;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.map-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.map-overlay > * {
+  pointer-events: auto;
+}
+
+.map-empty-label {
+  font: 400 11.5px/1 var(--font-mono);
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+
+/* ---- HUD panels ------------------------------------------------------------ */
+/* `.map-panel` is the surface treatment only — bridge blurs everything that
+   carries it (theme/modes.css) — so the two overlays place themselves and the
+   explorer stays a flex child. */
+.map-panel {
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+}
+
+.map-breadcrumb {
+  position: absolute;
+  z-index: 2;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 46%;
+  padding: 6px 10px;
+}
+
+.crumb,
+.crumb-current {
+  padding: 2px 4px;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.crumb {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+}
+
+.crumb:hover {
+  color: var(--accent);
+}
+
+.crumb-current {
+  color: var(--text);
+}
+
+.crumb-sep {
+  margin-right: 4px;
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.crumb-up {
+  margin-right: 4px;
+  padding: 1px 7px;
+  line-height: 1.2;
+  background: none;
+}
+
+/* Fit-to-view, at the far end of the breadcrumb: the camera's one control
+   that is worth a button rather than only a key. */
+.crumb-fit {
+  margin-left: 8px;
+  padding: 1px 7px;
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--text-muted);
+  background: none;
+}
+
+.crumb-fit:hover {
+  color: var(--accent);
+}
+
+.filter-wrap {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+}
+
+.map-filter {
+  width: 100%;
+  min-width: 0;
+  padding: 5px 22px 5px 8px;
+  font: 400 11.5px/1.2 var(--font-mono);
+}
+
+.filter-hint {
+  position: absolute;
+  right: 8px;
+  font: 400 10.5px/1 var(--font-mono);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.hidden-toggle {
+  padding: 5px 10px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background: none;
+}
+
+.hidden-toggle[aria-pressed='true'] {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* ---- explorer column -------------------------------------------------------- */
+/* A real column, not an overlay: the renderer's stage shrinks to make room for
+   it, which is why no renderer reserves space for a HUD any more. */
+.map-explorer {
+  flex: 0 0 320px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0;
+  border-width: 0 0 0 1px;
+  border-radius: 0;
+}
+
+.explorer-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.explorer-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.explorer-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.explorer-facts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.explorer-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+}
+
+.explorer-empty {
+  padding: 10px 12px;
+  font: 400 11px/1.4 var(--font-mono);
+  color: var(--text-muted);
+}
+
+.explorer-row {
+  --body-color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 12px;
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+}
+
+.explorer-row.kind-directory {
+  --body-color: var(--accent-2);
+}
+
+.explorer-row.kind-file {
+  --body-color: var(--text-muted);
+}
+
+.explorer-row:hover {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+.explorer-row.is-selected {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+/* Roving tabindex: exactly one row is a tab stop, and it shows where it is. */
+.explorer-row:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.row-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.explorer-row.is-selected .row-name {
+  color: var(--accent);
+}
+
+.row-open {
+  flex: 0 0 auto;
+  width: 5px;
+  height: 5px;
+  border: 1px solid var(--body-color);
+  border-radius: 50%;
+}
+
+.row-time {
+  flex: 0 0 auto;
+  font: 400 10px/1 var(--font-mono);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.explorer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  row-gap: 4px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.explorer-actions button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.explorer-context {
+  color: var(--text-muted);
+  font: 400 10.5px/1 var(--font-mono);
+  white-space: nowrap;
+}
+
+.detail-title {
+  font: 600 15px/1.2 var(--font-display);
+  overflow-wrap: anywhere;
+}
+
+.detail-sub {
+  font: 400 11px/1.4 var(--font-mono);
+  color: var(--text-muted);
+}
+
+.detail-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+}
+
+.detail-counts {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The shell only defines `.led` inside cockpit; the column needs it everywhere. */
+.map-explorer .led {
+  flex: 0 0 auto;
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.map-explorer .led-ok {
+  background: var(--success);
+}
+
+.map-explorer .led-warn {
+  background: var(--warning);
+}
+
+.map-explorer .led-err {
+  background: var(--danger);
+}
+
+.detail-primary {
+  padding: 4px 12px;
+  font-size: 12px;
+}
+
+/* ---- legend ---------------------------------------------------------------- */
+.map-legend {
+  position: absolute;
+  z-index: 2;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  max-width: 330px;
+  padding: 8px 12px;
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* How to move the camera. Its own row under the glyphs, and quiet enough to
+   read as a note rather than as another legend entry. */
+.legend-hint {
+  flex: 1 0 100%;
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  opacity: 0.62;
+}
+
+.legend-glyph {
+  --body-color: var(--accent);
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  overflow: visible;
+}
+
+.legend-glyph.kind-directory {
+  --body-color: var(--accent-2);
+}
+
+.legend-glyph.kind-file {
+  --body-color: var(--text-muted);
+}
+
+.legend-glyph .shape {
+  fill: var(--body-color);
+}
+
+.legend-glyph .belt {
+  fill: none;
+  stroke: var(--body-color);
+  stroke-width: 1;
+}
+
+.legend-glyph .halo {
+  fill: none;
+  stroke: var(--body-color);
+  stroke-width: 1;
+  opacity: 0.8;
+}
+
+.legend-glyph .err-arc {
+  fill: none;
+  stroke: var(--danger);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.legend-glyph .sat {
+  fill: var(--warning);
+}
+
+/* ---- star field ------------------------------------------------------------ */
+.star-mote {
+  fill: var(--text);
+}
+
+.star-mote.tier-0 {
+  opacity: 0.12;
+}
+
+.star-mote.tier-1 {
+  opacity: 0.22;
+}
+
+.star-mote.tier-2 {
+  opacity: 0.34;
+}
+
+/* ---- reference rings ------------------------------------------------------- */
+.map-ring {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.map-ring-rim {
+  stroke: color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+/* Chart is a drawn plate: alternate rings dash so the bands read as bands. */
+.map-svg[data-map-mode='chart'] .map-ring-alt {
+  stroke-dasharray: 3 4;
+}
+
+.ring-label {
+  fill: color-mix(in srgb, var(--text-muted) 70%, transparent);
+  font: 400 10px/1 var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* ---- flight path ----------------------------------------------------------- */
+.flight-line {
+  fill: none;
+  stroke: color-mix(in srgb, var(--accent-2) 45%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.ship-hull {
+  fill: var(--accent-2);
+}
+
+/* ---- the star -------------------------------------------------------------- */
+.star-ring {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1;
+}
+
+.star-dot {
+  fill: var(--accent);
+}
+
+.star-offline {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+}
+
+/* A gradient, not a flat disc: a flat 16% circle reads as a smudge over the
+   bridge nebula, a falloff reads as light. */
+.star-corona {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.corona-stop-in {
+  stop-color: var(--accent);
+  stop-opacity: 0.34;
+}
+
+.corona-stop-mid {
+  stop-color: var(--accent);
+  stop-opacity: 0.12;
+}
+
+.corona-stop-out {
+  stop-color: var(--accent);
+  stop-opacity: 0;
+}
+
+.map-svg[data-busy='true'] .corona-stop-in,
+.map-svg[data-busy='true'] .corona-stop-mid,
+.map-svg[data-busy='true'] .corona-stop-out {
+  stop-color: var(--warning);
+}
+
+.star-stop-core {
+  stop-color: var(--text);
+}
+
+.star-stop-mid {
+  stop-color: var(--accent);
+}
+
+.star-stop-edge {
+  stop-color: var(--accent);
+  stop-opacity: 0;
+}
+
+.star-label {
+  fill: var(--text-muted);
+  font: 500 13px/1 var(--font-display);
+  letter-spacing: 0.04em;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: color-mix(in srgb, var(--bg) 80%, transparent);
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+
+:root:not([data-motion='reduced']) .map-svg[data-map-motion='orbit'] .star-corona {
+  animation: map-corona 4s ease-in-out infinite;
+}
+
+:root:not([data-motion='reduced']) .map-svg[data-map-motion='orbit'] .map-star.is-busy .star-corona {
+  animation-duration: 1.5s;
+}
+
+@keyframes map-corona {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+/* ---- bodies ---------------------------------------------------------------- */
+.map-body {
+  --body-color: var(--accent);
+  cursor: pointer;
+  outline: none;
+}
+
+.map-body.kind-directory {
+  --body-color: var(--accent-2);
+}
+
+.map-body.kind-file {
+  --body-color: var(--text-muted);
+}
+
+.map-body .hit {
+  fill: none;
+  pointer-events: all;
+}
+
+.map-body .shape {
+  fill: var(--body-color);
+}
+
+.map-body .belt {
+  fill: none;
+  stroke: var(--body-color);
+  stroke-width: 1;
+}
+
+.map-body .moon {
+  fill: color-mix(in srgb, var(--body-color) 70%, transparent);
+}
+
+.map-body .halo,
+.map-body .halo-2 {
+  fill: none;
+  stroke: var(--body-color);
+  stroke-width: 1;
+  opacity: 0;
+}
+
+.map-body.is-open .halo {
+  opacity: 0.75;
+}
+
+.map-body.is-active .halo-2 {
+  opacity: 0.55;
+}
+
+.map-body .err-arc {
+  fill: none;
+  stroke: var(--danger);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.map-body .dirty-tick {
+  fill: none;
+  stroke: var(--warning);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.map-body .led-dot {
+  fill: var(--text-muted);
+}
+
+.map-body .led-dot.led-ok {
+  fill: var(--success);
+}
+
+.map-body .led-dot.led-warn {
+  fill: var(--warning);
+}
+
+.map-body .led-dot.led-err {
+  fill: var(--danger);
+}
+
+.map-body .sat {
+  fill: var(--warning);
+}
+
+/* Trails only exist while something is actually moving. */
+.map-body .trail {
+  display: none;
+  fill: none;
+  stroke: var(--body-color);
+  stroke-width: 1;
+  stroke-linecap: round;
+}
+
+.map-svg[data-map-motion='orbit'] .map-body .trail {
+  display: block;
+}
+
+.map-body .trail-far {
+  opacity: 0.25;
+}
+
+.map-body .trail-near {
+  opacity: 0.45;
+}
+
+/* ---- labels ---------------------------------------------------------------- */
+/* People click names, not dots: the label is part of its body's hit area
+   (the `<g>` carries the handlers, so click, double-click and hover all
+   behave identically). Decoration around the body stays inert. */
+.map-label,
+.label-count {
+  pointer-events: visiblePainted;
+}
+
+.map-body .trail,
+.map-body .halo,
+.map-body .halo-2,
+.map-body .moon,
+.map-body .reticle,
+.map-body .sel-ring {
+  pointer-events: none;
+}
+
+.map-label {
+  fill: var(--text);
+  font: 400 11.5px/1 var(--font-ui);
+  /* A hairline of the page colour behind the glyphs keeps names legible over
+     the star field and the bridge nebula without a box. */
+  paint-order: stroke;
+  stroke: color-mix(in srgb, var(--bg) 80%, transparent);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
+
+.map-label.flip {
+  text-anchor: end;
+}
+
+.label-count {
+  fill: var(--text-muted);
+}
+
+/* ---- names read at one size, whatever the zoom ----------------------------- */
+/* A name is a caption on the chart, not part of the drawing. The
+   counter-scale goes on the text itself, about its own anchor, so the label
+   stays exactly where `layoutLabels` put it and takes its halo stroke and its
+   `<tspan>` count with it. */
+.map-canvas .map-label,
+.map-canvas .star-label {
+  transform: scale(var(--inv-k));
+  transform-box: fill-box;
+  transform-origin: left center;
+}
+
+.map-canvas .map-label.flip {
+  transform-origin: right center;
+}
+
+.map-canvas .star-label {
+  transform-origin: center center;
+}
+
+/* Ring captions ride a `textPath`, which a transform would peel off the ring;
+   they hold their size through the font instead. */
+.map-canvas .ring-label {
+  font-size: calc(10px * var(--inv-k));
+}
+
+/* ---- derelicts: untouched work, drifting dark at the rim ------------------- */
+.map-body.band-older {
+  opacity: 0.45;
+}
+
+.map-body.band-older .map-label {
+  fill: var(--text-muted);
+}
+
+.map-svg[data-map-motion='orbit'] .map-body.band-older .trail {
+  display: none;
+}
+
+.map-body.band-older.is-hovered,
+.map-body.band-older.is-selected,
+.map-body.band-older:focus-visible {
+  opacity: 1;
+}
+
+/* ---- selection, hover, filter ---------------------------------------------- */
+.map-body .reticle,
+.map-body .sel-ring {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1;
+  opacity: 0;
+}
+
+.map-body.is-hovered .sel-ring {
+  opacity: 0.35;
+}
+
+.map-body.is-selected .sel-ring,
+.map-body:focus-visible .sel-ring {
+  opacity: 0.9;
+}
+
+/* Cockpit frames its selection in brackets instead of a ring. */
+[data-mode='cockpit'] .map-body.is-selected .sel-ring,
+[data-mode='cockpit'] .map-body:focus-visible .sel-ring {
+  opacity: 0;
+}
+
+[data-mode='cockpit'] .map-body.is-selected .reticle,
+[data-mode='cockpit'] .map-body:focus-visible .reticle {
+  opacity: 0.95;
+}
+
+.map-body.match .sel-ring {
+  opacity: 0.5;
+}
+
+.map-body.dim {
+  opacity: 0.16;
+}
+
+.map-body.dim .map-label {
+  display: none;
+}
+
+:root:not([data-motion='reduced']) .map-body.ping .sel-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: map-ping 600ms ease-out 1;
+}
+
+@keyframes map-ping {
+  from {
+    opacity: 0.9;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 0;
+    transform: scale(2.4);
+  }
+}
+
+/* ---- sector scan ----------------------------------------------------------- */
+.sweep-wedge {
+  stroke: none;
+}
+
+.sweep-stop-in {
+  stop-color: var(--accent);
+  stop-opacity: 0.18;
+}
+
+.sweep-stop-out {
+  stop-color: var(--accent);
+  stop-opacity: 0;
+}
+
+/* ---- dive transition -------------------------------------------------------- */
+/* fill-box keeps the zoom anchored on the system itself, which is the star. */
+.map-system {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+:root:not([data-motion='reduced']) .map-system {
+  transition:
+    transform 240ms ease,
+    opacity 240ms ease;
+}
+
+.map-system.dive-out-in {
+  transform: scale(1.6);
+  opacity: 0;
+}
+
+.map-system.dive-out-up {
+  transform: scale(0.6);
+  opacity: 0;
+}
+
+/* The entry pose is snapped to, then transitioned away from when the class
+   drops. `:root` is carried so these out-specify the motion-guarded
+   transition above; without it the snap would itself animate. */
+:root .map-system.dive-in-in {
+  transform: scale(0.6);
+  opacity: 0;
+  transition: none;
+}
+
+:root .map-system.dive-in-up {
+  transform: scale(1.6);
+  opacity: 0;
+  transition: none;
+}
+
+/* ---- per-mode deltas -------------------------------------------------------- */
+/* Paper: an instrument plate on graph paper. No glows anywhere. */
+[data-mode='paper'] .map-view {
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--text) 8%, transparent) 0.6px,
+    transparent 0.6px
+  );
+  background-size: 22px 22px;
+}
+
+/* Night Ops: calm, glow only on what the pointer or the selection is on. */
+[data-mode='night-ops'] .map-body.is-hovered .shape,
+[data-mode='night-ops'] .map-body.is-selected .shape {
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--body-color) 55%, transparent));
+}
+
+/* Cockpit and Bridge: everything lit. */
+[data-mode='cockpit'] .map-body .shape,
+[data-mode='bridge'] .map-body .shape {
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--body-color) 55%, transparent));
+}
+
+/* Paper is a drawn plate: the column is ruled onto it, not stacked over it. */
+[data-mode='paper'] .map-explorer {
+  background: none;
+}
+
+[data-mode='paper'] .explorer-row:hover {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+[data-mode='paper'] .explorer-row.is-selected {
+  background: none;
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* Cockpit: instrument labels, not prose. */
+[data-mode='cockpit'] .hidden-toggle,
+[data-mode='cockpit'] .map-legend,
+[data-mode='cockpit'] .explorer-context,
+[data-mode='cockpit'] .explorer-actions .detail-primary,
+[data-mode='cockpit'] .explorer-actions .link-button,
+[data-mode='cockpit'] .row-name {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+[data-mode='cockpit'] .explorer-facts {
+  gap: 3px;
+  padding: 8px 10px;
+}
+
+[data-mode='cockpit'] .map-breadcrumb .crumb,
+[data-mode='cockpit'] .map-breadcrumb .crumb-current,
+[data-mode='cockpit'] .explorer-crumbs .crumb,
+[data-mode='cockpit'] .explorer-crumbs .crumb-current {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+}
+
+/* ---- responsive ------------------------------------------------------------- */
+@container map (max-width: 800px) {
+  .map-legend {
+    display: none;
+  }
+}
+
+/* Strip form: under 720px of map there is no room for a column beside the
+   stage, so the explorer lies along the bottom as a 44px strip carrying its
+   breadcrumb, its counts and the filter. The listing and the actions go; the
+   map is the content.
+
+   Both children leave the flex flow and are placed against `.map-view`
+   instead, because a container query may not style its own container — and
+   `.map-view` IS the container, so the row/column decision cannot be made on
+   it. The stage keeps `position: relative`, so `.map-canvas` still fills it. */
+@container map (max-width: 720px) {
+  .map-stage {
+    position: absolute;
+    inset: 0 0 44px;
+  }
+
+  .map-explorer {
+    position: absolute;
+    inset: auto 0 0;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    height: 44px;
+    padding: 0 12px;
+    overflow: hidden;
+    border-width: 1px 0 0;
+    white-space: nowrap;
+  }
+
+  .explorer-head {
+    flex: 1 1 auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    padding: 0;
+    border-bottom: none;
+  }
+
+  .explorer-crumbs {
+    flex: 0 1 auto;
+  }
+
+  .explorer-controls {
+    flex: 0 1 220px;
+  }
+
+  .explorer-facts {
+    flex: 0 1 auto;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
+    padding: 0;
+    overflow: hidden;
+    border-bottom: none;
+  }
+
+  .explorer-facts .detail-title {
+    font-size: 13px;
+  }
+
+  .explorer-facts .detail-row,
+  .explorer-facts .error-text,
+  .explorer-list,
+  .explorer-actions {
+    display: none;
+  }
+}

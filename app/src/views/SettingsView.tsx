@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useSessionStore } from '../session/store';
 import { useThemeStore, getSkinsForMode } from '../theme/ThemeProvider';
 import { MODES } from '../theme/tokens';
+import { MAP_METHODS, rendererForMode, type MapMethod } from '../map/renderer';
+import { useMapStore } from '../map/store';
 
 const MOTION_OPTIONS = ['system', 'reduced', 'full'] as const;
 
@@ -23,6 +25,8 @@ export function SettingsView() {
   const setMotion = useThemeStore((s) => s.setMotion);
   const skinByMode = useThemeStore((s) => s.skinByMode);
   const setSkin = useThemeStore((s) => s.setSkin);
+  const methodByMode = useMapStore((s) => s.methodByMode);
+  const setMethodForMode = useMapStore((s) => s.setMethodForMode);
 
   function persistConfig() {
     setConfig({ baseUrl, token });
@@ -79,6 +83,37 @@ export function SettingsView() {
             </select>
           </label>
         ))}
+      </section>
+
+      <section className="settings-section">
+        <h2>Map style</h2>
+        {MODES.map((m) => {
+          const defaultMethod = rendererForMode(m.id);
+          const current = rendererForMode(m.id, methodByMode);
+          const blurb = MAP_METHODS.find((method) => method.id === current)?.blurb;
+          return (
+            <div key={m.id}>
+              <label className="settings-row">
+                <span>{m.label}</span>
+                <select
+                  value={current}
+                  onChange={(e) => {
+                    const next = e.target.value as MapMethod;
+                    setMethodForMode(m.id, next === defaultMethod ? null : next);
+                  }}
+                >
+                  {MAP_METHODS.map((method) => (
+                    <option key={method.id} value={method.id}>
+                      {method.label}
+                      {method.id === defaultMethod ? ' (default)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {blurb && <p className="muted">{blurb}</p>}
+            </div>
+          );
+        })}
       </section>
 
       <section className="settings-section">

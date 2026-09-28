@@ -7,6 +7,7 @@ import { useSessionStore } from '../session/store';
 import type { ConnectionState } from '../session/store';
 import type { KernelStatus } from '../session/types';
 import { useAgentStore } from '../agent/store';
+import { useConnectingSeconds } from './NotConnectedCard';
 import { useLayoutStore } from './layout';
 import { useUiStore } from './uiStore';
 
@@ -50,12 +51,16 @@ export function ServiceDots() {
   const agentAuth = useAgentStore((s) => s.auth);
   const setView = useUiStore((s) => s.setView);
   const setVisible = useLayoutStore((s) => s.setVisible);
+  const connectingSeconds = useConnectingSeconds();
 
   const kernelTone = KERNEL_TONE[kernelStatus];
   const kernelTitle = kernelName ? `Kernel: ${kernelName} · ${kernelStatus}` : `Kernel: ${kernelStatus}`;
 
+  const connecting = jupyterConnection === 'connecting';
   const jupyterTone = connectionTone(jupyterConnection);
-  const jupyterTitle = `Jupyter server: ${CONNECTION_LABEL[jupyterConnection]}`;
+  const jupyterTitle = connecting
+    ? `Connecting… (${connectingSeconds}s)`
+    : `Jupyter server: ${CONNECTION_LABEL[jupyterConnection]}`;
 
   const agentTone: Tone =
     agentConnection === 'connected' ? (agentAuth?.loggedIn ? 'success' : 'warning') : connectionTone(agentConnection);
@@ -78,7 +83,10 @@ export function ServiceDots() {
         title={jupyterTitle}
         onClick={() => setView('settings')}
       >
-        <i className={`kernel-dot kernel-dot-${jupyterTone}`} aria-hidden="true" />
+        <i
+          className={`kernel-dot kernel-dot-${jupyterTone}${connecting ? ' kernel-dot-pulse' : ''}`}
+          aria-hidden="true"
+        />
         jupyter
       </button>
       <button

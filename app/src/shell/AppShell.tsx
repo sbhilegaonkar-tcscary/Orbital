@@ -1,19 +1,26 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { useThemeStore } from '../theme/ThemeProvider';
+import { useSessionStore } from '../session/store';
 import { Sky } from '../effects/Sky';
+import { ConnectBar } from './NotConnectedCard';
 import { TopBar } from './TopBar';
 import { HintStrip } from './HintStrip';
 import { Rail } from './Rail';
 import { StatusBar } from './StatusBar';
 import { CommandPalette } from './CommandPalette';
+import { ShortcutsHelp } from './ShortcutsHelp';
+import { closeShortcutsHelp, useShortcutsHelpOpen } from './shortcuts';
 import { Dock } from './Dock';
 import { Resizer } from './Resizer';
 import { idsOnSide, useLayoutStore, DEFAULT_SIZE, PANEL_IDS, effectiveSize, useViewportTick, type PanelId } from './layout';
 import { runCommand } from './commands';
 import { wireInspector } from '../inspector/store';
 import { getActiveSession, onExecutionSettled } from '../notebook/store';
-// Side-effect only: runs the notebook command registrations once.
+// Side-effect only: runs the notebook and map command registrations once, and
+// starts the connect loop on load when a previous session left the flag set.
 import '../notebook/commands';
+import '../map/commands';
+import '../session/autoconnect';
 
 /** Overlay breakpoint for side docks (docs/ARCHITECTURE.md "Layout (M6)"). */
 const NARROW_BREAKPOINT = 900;
@@ -27,6 +34,7 @@ function isTypingTarget(target: EventTarget | null): boolean {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const mode = useThemeStore((s) => s.mode);
+  const connecting = useSessionStore((s) => s.connection === 'connecting');
   const panels = useLayoutStore((s) => s.panels);
   const setSize = useLayoutStore((s) => s.setSize);
   const setVisible = useLayoutStore((s) => s.setVisible);
@@ -37,6 +45,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [paletteOpen, setPaletteOpen] = useState(
     () => new URLSearchParams(window.location.search).get('menu') === 'palette',
   );
+
+  const helpOpen = useShortcutsHelpOpen();
 
   const [isNarrow, setIsNarrow] = useState(() => window.innerWidth < NARROW_BREAKPOINT);
   useEffect(() => {
@@ -168,7 +178,12 @@ export function AppShell({ children }: { children: ReactNode }) {
       )}
 
       <div className="center-column">
-        <div className="view-container">{children}</div>
+        <div className="view-container">
+          {/* Every view shows the connect progress, not just the two that
+              render the connection card. */}
+          {connecting && <ConnectBar className="connect-bar-top" />}
+          {children}
+        </div>
         {bottomVisible && (
           <Resizer
             orientation="horizontal"
@@ -214,6 +229,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       )}
 
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      {/* One mount for the whole shell: the notebook, the map and the palette
+          command all open the same overlay through `shell/shortcuts.ts`. */}
+      <ShortcutsHelp open={helpOpen} onClose={closeShortcutsHelp} />
     </div>
   );
 }

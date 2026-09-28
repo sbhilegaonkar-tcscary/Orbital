@@ -1,0 +1,804 @@
+/*
+ * Paint for the zoom renderer (`map/zoom/ZoomMap.tsx`). Every colour here is a
+ * `var(--token)` or a `color-mix()` of one — nothing sets a literal colour,
+ * font, or size outside the design scale. The SVG carries geometry only; the
+ * single exception is the `fill="url(#…)"` gradient references, and even those
+ * resolve their stop colours from the classes at the bottom of this file.
+ *
+ * Two modes draw with this sheet and they are meant to look nothing alike:
+ *
+ *   night-ops  calm and unlit. Muted dust, flat planets with one band, no glow
+ *              anywhere except the ring under the pointer. UI-font labels.
+ *   cockpit    a tactical scope. Range rings with tick scales, contacts inside
+ *              corner brackets with an LED, mono uppercase labels carrying
+ *              BRG/RNG readouts, and a sweep running round the selected ring.
+ *
+ * Everything mode-specific is keyed on `[data-mode]` (set on `:root` by the
+ * theme provider), so the same markup reads correctly in both.
+ */
+
+/* ---- the host -------------------------------------------------------------- */
+.zoom-map {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+
+  /* Band tints. Recency is the map's one colour axis, so it is derived from
+     the two accents and the muted text colour rather than shipped per skin. */
+  --zoom-today: var(--accent);
+  --zoom-week: color-mix(in srgb, var(--accent) 72%, var(--accent-2));
+  --zoom-month: var(--accent-2);
+  --zoom-halfyear: color-mix(in srgb, var(--accent-2) 48%, var(--text-muted));
+  --zoom-older: var(--text-muted);
+  --zoom-band: var(--accent);
+
+  --zoom-shade: var(--bg);
+  --zoom-web: color-mix(in srgb, var(--accent-2) 65%, var(--text-muted));
+
+  --zoom-fly: 800ms;
+  --zoom-fade: 600ms;
+  --zoom-ease: cubic-bezier(0.32, 0.72, 0.24, 1);
+
+  /* 1 / the viewport's k, written on the `<svg>` by `ZoomMap`. The default
+     keeps the sheet correct wherever the camera has not been applied yet. */
+  --inv-k: 1;
+}
+
+.zoom-svg {
+  display: block;
+  user-select: none;
+  /* The stage is something you drag. `useViewport` adds `is-dragging` on the
+     element itself the moment a press crosses the threshold. */
+  cursor: grab;
+}
+
+.zoom-svg.is-dragging,
+.zoom-svg.is-dragging .zoom-body {
+  cursor: grabbing;
+}
+
+/* ---- the viewport ---------------------------------------------------------- */
+/* The user's pan and zoom, one transform, composed *outside* the fly camera so
+   the dive arithmetic never sees it. `screen = world * k + (x, y)` only holds
+   with the origin at the view box's own 0,0. */
+.zoom-map .viewport {
+  transform-box: view-box;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+/* ---- the camera and its two level layers ----------------------------------- */
+/* One transform animates; `camera.ts` computes it, and the nesting matrix on
+   the layer underneath makes the rebase at the end a no-op. */
+.zoom-camera {
+  transform-box: view-box;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.zoom-layer {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.zoom-layer.is-live {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+:root:not([data-motion='reduced']) .zoom-camera {
+  transition: transform var(--zoom-fly) var(--zoom-ease);
+}
+
+/* The departing level clears 200 ms before the camera lands: the tail is the
+   motion trail. */
+:root:not([data-motion='reduced']) .zoom-layer {
+  transition: opacity var(--zoom-fade) var(--zoom-ease);
+}
+
+/* ---- band tints ------------------------------------------------------------ */
+.zoom-map .band-today {
+  --zoom-band: var(--zoom-today);
+}
+
+.zoom-map .band-week {
+  --zoom-band: var(--zoom-week);
+}
+
+.zoom-map .band-month {
+  --zoom-band: var(--zoom-month);
+}
+
+.zoom-map .band-halfyear {
+  --zoom-band: var(--zoom-halfyear);
+}
+
+.zoom-map .band-older {
+  --zoom-band: var(--zoom-older);
+}
+
+/* Untouched work drifts dark at the rim, as it does on the orbital chart. */
+.zoom-map .zoom-body.band-halfyear {
+  opacity: 0.82;
+}
+
+.zoom-map .zoom-body.band-older {
+  opacity: 0.52;
+}
+
+.zoom-map .zoom-body.band-older.is-hovered,
+.zoom-map .zoom-body.band-older.is-selected,
+.zoom-map .zoom-body.band-halfyear.is-hovered,
+.zoom-map .zoom-body.band-halfyear.is-selected,
+.zoom-map .zoom-body:focus-visible {
+  opacity: 1;
+}
+
+/* ---- hit targets ----------------------------------------------------------- */
+/* People click names as readily as dots, so the label is part of its body's
+   hit area; every piece of decoration around it is inert. */
+.zoom-body {
+  cursor: pointer;
+  outline: none;
+}
+
+.zoom-body * {
+  pointer-events: none;
+}
+
+.zoom-body .zoom-hit {
+  fill: none;
+  pointer-events: all;
+}
+
+.zoom-body .zoom-label {
+  pointer-events: visiblePainted;
+}
+
+/* ---- type ------------------------------------------------------------------ */
+.zoom-label {
+  /* A hairline of the page colour behind the glyphs keeps names legible over
+     the dust without a box. */
+  paint-order: stroke;
+  stroke: color-mix(in srgb, var(--bg) 78%, transparent);
+  stroke-width: 3;
+  stroke-linejoin: round;
+  fill: var(--text);
+}
+
+.zoom-label.flip {
+  text-anchor: end;
+}
+
+.zoom-label.zoom-mid {
+  text-anchor: middle;
+}
+
+/* ---- names read at one size, whatever the zoom ----------------------------- */
+/* A name is a caption on the map, not part of the drawing: it stays 11 px
+   whether you are looking at the whole galaxy or one moon. The counter-scale
+   goes on the text itself, about its own anchor, so the label stays exactly
+   where the solver put it — and it takes the halo stroke with it, which is why
+   nothing here has to know the base sizes the rules above set. */
+.zoom-map .zoom-label,
+.zoom-map .zoom-readout {
+  transform: scale(var(--inv-k));
+  transform-box: fill-box;
+  transform-origin: left center;
+}
+
+.zoom-map .zoom-label.flip {
+  transform-origin: right center;
+}
+
+.zoom-map .zoom-label.zoom-mid {
+  transform-origin: center center;
+}
+
+/* Ring captions ride a `textPath`, which a transform would peel off the ring;
+   they hold their size through the font instead. */
+.zoom-map .zoom-ring-cap {
+  font-size: calc(9px * var(--inv-k));
+}
+
+.zoom-title {
+  font: 500 15px/1 var(--font-display);
+  letter-spacing: 0.04em;
+}
+
+.zoom-name {
+  font: 500 12px/1 var(--font-display);
+  letter-spacing: 0.03em;
+}
+
+.zoom-leaf {
+  font: 400 11px/1 var(--font-ui);
+  fill: color-mix(in srgb, var(--text) 82%, var(--text-muted));
+}
+
+.zoom-cap {
+  font: 400 10px/1 var(--font-mono);
+  fill: var(--text-muted);
+}
+
+.zoom-note {
+  font: 400 9.5px/1 var(--font-mono);
+  letter-spacing: 0.1em;
+  fill: color-mix(in srgb, var(--text-muted) 80%, transparent);
+}
+
+.zoom-ring-cap {
+  font: 400 9px/1 var(--font-mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  fill: color-mix(in srgb, var(--text-muted) 58%, transparent);
+  stroke: none;
+}
+
+/* ---- reference rings ------------------------------------------------------- */
+.zoom-ring {
+  fill: none;
+  stroke: color-mix(in srgb, var(--border) 85%, transparent);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.zoom-ring.is-alt {
+  stroke: color-mix(in srgb, var(--border) 60%, transparent);
+  stroke-dasharray: 3 6;
+}
+
+.zoom-ring.is-rim {
+  stroke: color-mix(in srgb, var(--border) 45%, transparent);
+  stroke-dasharray: 1 7;
+}
+
+.zoom-tick {
+  fill: none;
+  stroke: color-mix(in srgb, var(--border) 70%, transparent);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+/* ---- depth 1: galaxies ----------------------------------------------------- */
+.zoom-web-line {
+  fill: none;
+  stroke: var(--zoom-web);
+  stroke-width: 1;
+  opacity: 0.24;
+  vector-effect: non-scaling-stroke;
+}
+
+.zoom-gx-halo {
+  opacity: 0.6;
+}
+
+.zoom-gx-core {
+  fill: var(--text);
+  opacity: 0.42;
+}
+
+.zoom-star {
+  fill: var(--zoom-band);
+}
+
+.zoom-star.tier-0 {
+  opacity: 0.95;
+}
+
+.zoom-star.tier-1 {
+  opacity: 0.68;
+}
+
+.zoom-star.tier-2 {
+  opacity: 0.44;
+}
+
+.zoom-loose-hull {
+  fill: none;
+  stroke: color-mix(in srgb, var(--border) 70%, transparent);
+  stroke-dasharray: 2 5;
+  vector-effect: non-scaling-stroke;
+}
+
+.zoom-mote {
+  fill: var(--zoom-band);
+  opacity: 0.85;
+}
+
+.zoom-body.kind-notebook .zoom-mote {
+  opacity: 1;
+}
+
+/* ---- depth 2: the local star ----------------------------------------------- */
+.zoom-star-core {
+  fill: var(--text);
+  opacity: 0.9;
+}
+
+.zoom-star-offline {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+}
+
+.zoom-star-glow {
+  opacity: 0.85;
+}
+
+.zoom-local-star.is-busy .zoom-star-core {
+  fill: var(--warning);
+}
+
+/* ---- planets, notebooks, files --------------------------------------------- */
+.zoom-pl-band {
+  fill: var(--zoom-shade);
+  opacity: 0.22;
+}
+
+.zoom-pl-band.mid {
+  fill: var(--text);
+  opacity: 0.12;
+}
+
+.zoom-pl-rim {
+  fill: none;
+  stroke: var(--text);
+  stroke-opacity: 0.26;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.zoom-pl-ring {
+  fill: none;
+  stroke: var(--zoom-band);
+  stroke-width: 1.4;
+  opacity: 0.45;
+  vector-effect: non-scaling-stroke;
+}
+
+.zoom-nb {
+  fill: var(--zoom-band);
+  stroke: var(--text);
+  stroke-opacity: 0.32;
+  stroke-width: 0.8;
+  vector-effect: non-scaling-stroke;
+}
+
+.zoom-nb-glow {
+  opacity: 0.32;
+}
+
+.zoom-ast {
+  fill: var(--zoom-band);
+  stroke: var(--zoom-shade);
+  stroke-opacity: 0.35;
+  stroke-width: 0.7;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Live state rides the body, exactly as it does on the orbital chart. */
+.zoom-led {
+  fill: var(--text-muted);
+}
+
+.zoom-led.led-ok {
+  fill: var(--success);
+}
+
+.zoom-led.led-warn {
+  fill: var(--warning);
+}
+
+.zoom-led.led-err {
+  fill: var(--danger);
+}
+
+.zoom-body.is-open .zoom-nb {
+  stroke-opacity: 0.85;
+  stroke-width: 1.4;
+}
+
+.zoom-body.has-error .zoom-nb {
+  stroke: var(--danger);
+  stroke-opacity: 0.9;
+}
+
+.zoom-body.is-dirty .zoom-nb {
+  stroke: var(--warning);
+  stroke-opacity: 0.8;
+}
+
+/* ---- depth 3: outposts ----------------------------------------------------- */
+.zoom-outpost {
+  fill: var(--zoom-band);
+  stroke: var(--accent);
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+}
+
+.zoom-outpost-halo {
+  fill: none;
+  stroke: var(--accent);
+  stroke-opacity: 0.4;
+  stroke-dasharray: 2 3;
+  vector-effect: non-scaling-stroke;
+}
+
+/* ---- depth 4+: the plain chart --------------------------------------------- */
+.zoom-plain .zoom-fb-core {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.zoom-plain .zoom-fb-dot {
+  fill: var(--accent);
+}
+
+.zoom-plain .zoom-fb-file {
+  fill: color-mix(in srgb, var(--text-muted) 85%, transparent);
+}
+
+.zoom-plain .zoom-fb-dir {
+  fill: none;
+  stroke: var(--accent-2);
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+}
+
+.zoom-plain .zoom-leaf {
+  font-size: 10px;
+  fill: var(--text-muted);
+}
+
+.zoom-plain .zoom-label {
+  stroke-opacity: 0.55;
+}
+
+/* ---- selection, hover, filter ---------------------------------------------- */
+/* Selection IS focus here: the body brightens, its ring comes up dashed, and a
+   selected folder fans its children out as a preview constellation. */
+.zoom-sel {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.zoom-ring-sel {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.2;
+  stroke-dasharray: 3 4;
+  opacity: 0;
+  vector-effect: non-scaling-stroke;
+}
+
+:root:not([data-motion='reduced']) .zoom-ring-sel {
+  transition: opacity 160ms linear;
+}
+
+.zoom-body.is-hovered .zoom-ring-sel,
+.zoom-body:focus-visible .zoom-ring-sel {
+  opacity: 0.5;
+}
+
+.zoom-body.is-selected .zoom-ring-sel {
+  opacity: 1;
+}
+
+.zoom-body.match .zoom-ring-sel {
+  opacity: 0.45;
+}
+
+.zoom-body.is-hovered .zoom-label,
+.zoom-body.is-selected .zoom-label,
+.zoom-body:focus-visible .zoom-label {
+  fill: var(--text);
+}
+
+.zoom-body.is-selected .zoom-star,
+.zoom-body.is-hovered .zoom-star {
+  opacity: 1;
+}
+
+.zoom-body.dim {
+  opacity: 0.16;
+}
+
+.zoom-body.dim .zoom-label {
+  display: none;
+}
+
+.zoom-sweep {
+  display: none;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.zoom-preview-arc {
+  fill: none;
+  stroke: color-mix(in srgb, var(--accent) 40%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.zoom-preview-dot {
+  fill: var(--zoom-band);
+  opacity: 0.7;
+}
+
+.zoom-preview-dot.is-dir {
+  fill: none;
+  stroke: var(--accent-2);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+/* ---- cockpit-only furniture (hidden by default, drawn only in cockpit) ------ */
+.zoom-bracket,
+.zoom-contact-led,
+.zoom-readout {
+  display: none;
+}
+
+/* ---- gradient stops -------------------------------------------------------- */
+/* The markup names a paint exactly once, as `fill="url(#…)"`. The colour still
+   comes from here: the band class on the `<radialGradient>` sets `--zoom-band`
+   and every `<stop>` inherits it. Without these rules a stop defaults to opaque
+   black, which is what a missing band class looks like. */
+.zoom-map .zoom-halo-0 {
+  stop-color: var(--zoom-band);
+  stop-opacity: 0.46;
+}
+
+.zoom-map .zoom-halo-1 {
+  stop-color: var(--zoom-band);
+  stop-opacity: 0.14;
+}
+
+.zoom-map .zoom-halo-2 {
+  stop-color: var(--zoom-band);
+  stop-opacity: 0;
+}
+
+.zoom-map .zoom-pl-0 {
+  stop-color: var(--zoom-band);
+  stop-opacity: 1;
+}
+
+.zoom-map .zoom-pl-1 {
+  stop-color: var(--zoom-band);
+  stop-opacity: 0.7;
+}
+
+.zoom-map .zoom-pl-2 {
+  stop-color: var(--zoom-band);
+  stop-opacity: 0.34;
+}
+
+.zoom-map .zoom-shade-0 {
+  stop-color: var(--zoom-shade);
+  stop-opacity: 0;
+}
+
+.zoom-map .zoom-shade-1 {
+  stop-color: var(--zoom-shade);
+  stop-opacity: 0.4;
+}
+
+.zoom-map .zoom-shade-2 {
+  stop-color: var(--zoom-shade);
+  stop-opacity: 0.78;
+}
+
+.zoom-map .zoom-glow-0 {
+  stop-color: var(--accent);
+  stop-opacity: 0.45;
+}
+
+.zoom-map .zoom-glow-1 {
+  stop-color: var(--accent);
+  stop-opacity: 0.2;
+}
+
+.zoom-map .zoom-glow-2 {
+  stop-color: var(--accent-2);
+  stop-opacity: 0;
+}
+
+/* ============================================================================
+   NIGHT OPS — calm, unlit
+   ========================================================================== */
+[data-mode='night-ops'] .zoom-map {
+  /* Dust, not neon: every band is pulled toward the muted text colour so the
+     galaxies read as cold cyan haze rather than as light sources. */
+  --zoom-today: color-mix(in srgb, var(--accent) 74%, var(--text-muted));
+  --zoom-week: color-mix(in srgb, var(--accent) 52%, var(--text-muted));
+  --zoom-month: color-mix(in srgb, var(--accent-2) 56%, var(--text-muted));
+  --zoom-halfyear: color-mix(in srgb, var(--accent-2) 32%, var(--text-muted));
+  --zoom-older: color-mix(in srgb, var(--text-muted) 70%, transparent);
+  --zoom-web: color-mix(in srgb, var(--accent) 40%, var(--text-muted));
+}
+
+/* Labels are Inter (the UI face), never the display or mono face. */
+[data-mode='night-ops'] .zoom-map .zoom-title,
+[data-mode='night-ops'] .zoom-map .zoom-name,
+[data-mode='night-ops'] .zoom-map .zoom-leaf,
+[data-mode='night-ops'] .zoom-map .zoom-cap {
+  font-family: var(--font-ui);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+[data-mode='night-ops'] .zoom-map .zoom-title {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* No glow anywhere except the ring under the pointer. What is left of the
+   halos is dust bloom, an order of magnitude below a light source. */
+[data-mode='night-ops'] .zoom-map .zoom-gx-halo {
+  opacity: 0.16;
+}
+
+[data-mode='night-ops'] .zoom-map .zoom-nb-glow {
+  display: none;
+}
+
+[data-mode='night-ops'] .zoom-map .zoom-star-glow {
+  opacity: 0.22;
+}
+
+[data-mode='night-ops'] .zoom-map .zoom-star.tier-0 {
+  opacity: 0.72;
+}
+
+[data-mode='night-ops'] .zoom-map .zoom-star.tier-1 {
+  opacity: 0.48;
+}
+
+[data-mode='night-ops'] .zoom-map .zoom-star.tier-2 {
+  opacity: 0.28;
+}
+
+/* Flat planets: one band, no terminator, no ring. */
+[data-mode='night-ops'] .zoom-map .zoom-pl-band.edge,
+[data-mode='night-ops'] .zoom-map .zoom-pl-shade,
+[data-mode='night-ops'] .zoom-map .zoom-pl-ring {
+  display: none;
+}
+
+[data-mode='night-ops'] .zoom-map .zoom-pl-band.mid {
+  opacity: 0.16;
+}
+
+/* Flat means flat: the planet gradient keeps only enough falloff to stop the
+   disc reading as a sticker, not enough to model a sphere. */
+[data-mode='night-ops'] .zoom-map .zoom-pl-1 {
+  stop-opacity: 0.94;
+}
+
+[data-mode='night-ops'] .zoom-map .zoom-pl-2 {
+  stop-opacity: 0.82;
+}
+
+[data-mode='night-ops'] .zoom-map .zoom-pl-rim {
+  stroke-opacity: 0.18;
+}
+
+[data-mode='night-ops'] .zoom-map .zoom-nb {
+  stroke: none;
+}
+
+[data-mode='night-ops'] .zoom-map .zoom-body.is-open .zoom-nb {
+  stroke: var(--accent);
+  stroke-opacity: 0.7;
+  stroke-width: 1.2;
+}
+
+/* ============================================================================
+   COCKPIT — a tactical scope
+   ========================================================================== */
+[data-mode='cockpit'] .zoom-map {
+  --zoom-web: color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+/* Every label is a readout: mono, uppercase, tracked. */
+[data-mode='cockpit'] .zoom-map .zoom-title,
+[data-mode='cockpit'] .zoom-map .zoom-name,
+[data-mode='cockpit'] .zoom-map .zoom-leaf,
+[data-mode='cockpit'] .zoom-map .zoom-cap {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+[data-mode='cockpit'] .zoom-map .zoom-title {
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+[data-mode='cockpit'] .zoom-map .zoom-name {
+  font-size: 10.5px;
+}
+
+[data-mode='cockpit'] .zoom-map .zoom-leaf {
+  font-size: 10px;
+}
+
+[data-mode='cockpit'] .zoom-map .zoom-cap {
+  font-size: 9px;
+}
+
+/* Contacts sit inside corner brackets, with a status LED at the top right. */
+[data-mode='cockpit'] .zoom-map .zoom-bracket {
+  display: block;
+  fill: none;
+  stroke: color-mix(in srgb, var(--accent) 55%, transparent);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+[data-mode='cockpit'] .zoom-map .zoom-body.is-hovered .zoom-bracket,
+[data-mode='cockpit'] .zoom-map .zoom-body.is-selected .zoom-bracket,
+[data-mode='cockpit'] .zoom-map .zoom-body:focus-visible .zoom-bracket {
+  stroke: var(--accent);
+}
+
+[data-mode='cockpit'] .zoom-map .zoom-contact-led {
+  display: block;
+  fill: color-mix(in srgb, var(--success) 70%, transparent);
+}
+
+[data-mode='cockpit'] .zoom-map .zoom-body.is-dirty .zoom-contact-led {
+  fill: var(--warning);
+}
+
+[data-mode='cockpit'] .zoom-map .zoom-body.has-error .zoom-contact-led {
+  fill: var(--danger);
+}
+
+/* The BRG/RNG readout would be soup on every contact at once, so it belongs to
+   whichever one you are actually looking at. */
+[data-mode='cockpit'] .zoom-map .zoom-body.is-hovered .zoom-readout,
+[data-mode='cockpit'] .zoom-map .zoom-body.is-selected .zoom-readout,
+[data-mode='cockpit'] .zoom-map .zoom-body:focus-visible .zoom-readout {
+  display: block;
+  font: 400 8.5px/1 var(--font-mono);
+  letter-spacing: 0.1em;
+  fill: color-mix(in srgb, var(--accent) 85%, var(--text));
+  paint-order: stroke;
+  stroke: color-mix(in srgb, var(--bg) 80%, transparent);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
+
+[data-mode='cockpit'] .zoom-map .zoom-tick {
+  stroke: color-mix(in srgb, var(--accent) 38%, transparent);
+}
+
+[data-mode='cockpit'] .zoom-map .zoom-ring-cap {
+  fill: color-mix(in srgb, var(--accent) 60%, var(--text-muted));
+}
+
+/* A 1 px sweep runs around the selected body's ring. Cockpit is the one mode
+   whose CSS animations survive theme/modes.css. */
+[data-mode='cockpit'] .zoom-map .zoom-body.is-selected .zoom-sweep {
+  display: block;
+}
+
+:root[data-mode='cockpit']:not([data-motion='reduced']) .zoom-map .zoom-body.is-selected .zoom-sel {
+  animation: zoom-sweep 2.6s linear infinite;
+}
+
+@keyframes zoom-sweep {
+  to {
+    transform: rotate(360deg);
+  }
+}

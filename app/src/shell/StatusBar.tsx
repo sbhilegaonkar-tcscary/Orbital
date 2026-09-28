@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useActiveNotebook } from '../notebook/store';
+import { useSessionStore } from '../session/store';
+import { useConnectingSeconds } from './NotConnectedCard';
 
 function dayOfYear(d: Date): number {
   const start = new Date(d.getFullYear(), 0, 0);
@@ -16,6 +18,8 @@ function formatStarDate(d: Date): string {
 
 export function StatusBar() {
   const notebook = useActiveNotebook();
+  const connecting = useSessionStore((s) => s.connection === 'connecting');
+  const connectingSeconds = useConnectingSeconds();
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -30,6 +34,7 @@ export function StatusBar() {
   return (
     <footer className="statusbar">
       <span className="statusbar-left">
+        {connecting && <>connecting to jupyter · {connectingSeconds}s · </>}
         {cells} cells · {executed} executed · {errors} error(s)
       </span>
       <span className="statusbar-right">{formatStarDate(now)}</span>

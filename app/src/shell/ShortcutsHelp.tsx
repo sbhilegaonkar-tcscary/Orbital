@@ -12,11 +12,13 @@ import './shortcuts.css';
 const SECTIONS: { context: ShortcutContext; title: string }[] = [
   { context: 'command', title: 'Command mode' },
   { context: 'edit', title: 'Edit mode' },
+  { context: 'map', title: 'Map view' },
   { context: 'global', title: 'Global' },
 ];
 
 export function ShortcutsHelp({ open, onClose }: { open: boolean; onClose: () => void }) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const returnTo = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -26,6 +28,19 @@ export function ShortcutsHelp({ open, onClose }: { open: boolean; onClose: () =>
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [open, onClose]);
+
+  // The dialog takes focus so Esc closes it wherever it was opened from (the
+  // notebook, the map, the palette), and hands focus back on the way out.
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement;
+    returnTo.current = previous instanceof HTMLElement ? previous : null;
+    rootRef.current?.focus();
+    return () => {
+      returnTo.current?.focus();
+      returnTo.current = null;
+    };
+  }, [open]);
 
   if (!open) return null;
 
@@ -63,8 +78,9 @@ export function ShortcutsHelp({ open, onClose }: { open: boolean; onClose: () =>
                     {s.keys.split(' / ').map((chord, i) => (
                       <span key={chord}>
                         {i > 0 && <span className="shortcuts-help-sep">/</span>}
-                        {chord.split(' ').map((k) => (
-                          <kbd key={k}>{k}</kbd>
+                        {/* "D D" repeats a key, so the index has to be part of it. */}
+                        {chord.split(' ').map((k, ki) => (
+                          <kbd key={`${k}-${ki}`}>{k}</kbd>
                         ))}
                       </span>
                     ))}

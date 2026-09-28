@@ -53,7 +53,10 @@ cd app && npx tsc -p tsconfig.app.json --noEmit && npx vitest run && npm run bui
 cd agent && npm test
 ```
 
-At handoff: type-check clean, build clean, 178 frontend tests, 5 sidecar tests.
+At handoff: type-check clean, build clean, 383 frontend tests passing (384 with the known failure), 5 sidecar tests.
+One frontend test (`notebook/model.test.ts`) fails while the workspace copy of
+`hull-stress-analysis.ipynb` differs from the committed one; run
+`git checkout -- workspace/hull-stress-analysis.ipynb` first.
 
 ## What is done
 
@@ -77,12 +80,28 @@ M0 through M7 plus a usability pass (M6.5). In one sentence each:
   browser, permission prompts, honest connection and login states. Verified
   connecting and logged in; **a real agent conversation has not been exercised
   end to end**. That is the first thing to try.
+- **Map** (2026-09-27, then M8.5 on 2026-09-28): one renderer per theme mode
+  instead of a single chart — Paper and Bridge draw the cartography method
+  (worlds, an orrery ring, painted planet characters in Bridge, abstract
+  sigils in Paper), Night Ops and Cockpit draw the zoom method (galaxy →
+  system → moons, a camera fly-in/out, then the plain chart beyond depth 3),
+  and the original M8 orbital chart survives as a third, overridable style.
+  All three are chosen per theme mode with a Settings override. A 320px
+  explorer column beside the map replaced the old detail card: it always
+  lists one folder (the selection, its parent, or the system on screen) and
+  creates notebooks, folders and files in the folder it is listing. SVG plus
+  one requestAnimationFrame loop, no PixiJS. M8 was checked against a running
+  Jupyter; M8.5 has not had a live-Jupyter pass yet (see `docs/STATUS.md`).
+- **Connection flow** (2026-09-27): Connect retries with a visible progress
+  sweep until Jupyter answers, can be cancelled, stops on a refused token, and
+  auto-connects on the next load after one success.
 
 ## What is next
 
 | # | Milestone | Notes |
 |---|---|---|
-| M8 | Map view | Projects as bodies, minimalist and orbit modes. Owner has not said whether to do a mockup round first (the notebook got one; see `styleguide/`). Ask. |
+| M8 | Map view | Built 2026-09-27: SVG star system, Chart/Orbit, live kernel state, flight path, `?fixture=1` canned system. Awaiting owner test; uncommitted at the time of writing. Design in ARCHITECTURE.md "Map (M8)". |
+| M8.5 | Map: one map per mode | Built 2026-09-28: cartography (Paper/Bridge) and zoom (Night Ops/Cockpit) renderers, plus an explorer column replacing the detail card; chart kept as a third, overridable style. Awaiting owner test; uncommitted. Design in ARCHITECTURE.md's Map section. |
 | M9 | Hub | Accounts, presence, shared projects, Yjs co-editing. Most invasive milestone; notebook model becomes a shared doc. |
 | M10 | Hardening | Playwright e2e, virtualized cells, packaging (Tauri desktop or hosted JupyterHub). Owner has not chosen desktop-before-hub or after. |
 | Later | ipywidgets, sprite customizer, gamification | Ideas list is in the first session's transcript; `styleguide/CATALOG.md` has the visual directions. |
@@ -124,6 +143,9 @@ M0 through M7 plus a usability pass (M6.5). In one sentence each:
   afterward or the model round-trip test fails.
 - The panel probed login once and cached the negative answer; now it
   re-checks every 8 s while the gate is showing.
+- **The browser pane can collapse to 0×0** (e.g. a hidden preview tab); a map
+  renderer mounted at that size must recover once it is resized back up. A
+  fix is in progress as of M8.5 — unverified, see `docs/STATUS.md`'s known gaps.
 
 ## How the work was done (so the next agent can continue the same way)
 

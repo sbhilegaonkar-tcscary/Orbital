@@ -15,7 +15,7 @@ they do not change it. Changes go through the orchestrator and are logged in
 | Code editor | CodeMirror 6 | Light, themeable via CSS vars, Python mode available |
 | Kernel & files | Jupyter Server via `@jupyterlab/services` | Kernel protocol, sessions, contents API already solved and battle-tested |
 | Execution host | Local Jupyter Server from `.venv` (Python 3.11) | Zero hosting cost; remote servers plug in through the same session layer |
-| Effects | CSS first; PixiJS later for the map | Keep the notebook cheap; the map is the only thing that needs a canvas |
+| Effects | CSS for the notebook; SVG + `requestAnimationFrame` for the map, not PixiJS | Keep the notebook cheap; the map is tens of bodies, not thousands, so SVG gives token theming and crisp text for free with no new dependency |
 | Social layer | Separate FastAPI service in `hub/` (later) | Jupyter Server is single-user; accounts, presence, and projects live elsewhere |
 | Desktop | Tauri wrapper in `desktop/` (later) | Same web build, lighter than Electron, can bundle the Python env |
 
@@ -63,6 +63,29 @@ notebook/
   Output.tsx             renders CellOutput[] (stream, text/plain, text/html, image/png, error)
   MarkdownCell.tsx       rendered markdown with click-to-edit
 
+map/
+  model.ts               geometry and classification: band/orbit/phase/period/scale, pure functions
+  store.ts               zustand: current system, mode, per-mode style override, selection, query,
+                         explorer/children/descendant hooks, body/status hooks, fixture seam
+  renderer.ts            the renderer seam: MapRendererProps, MapMethod, rendererForMode, MAP_METHODS
+  renderers.ts           MapMethod -> component: cartography | zoom | chart
+  MapExplorer.tsx        the explorer column: one folder's listing, facts, create row
+  MapCanvas.tsx          the chart style (the original M8 view): rings, star, bodies, moons, trails, flight path, sweep
+  MapHud.tsx             HTML overlays: breadcrumb, legend (toolbar and detail card moved to MapExplorer)
+  map.css                all map styling, tokens only, per-mode deltas via [data-mode]
+  fixture.ts             canned system tree for ?fixture=1
+  commands.ts            palette commands, registered at import (like notebook/commands.ts)
+  cartography/
+    layout.ts             the composition solver: golden-angle seeds, relaxation, uniform fit
+    sigils.ts              world faces: Bridge's five painted characters, Paper's five sigil families
+    CartographyMap.tsx     the renderer: composition, interaction, the bead-walk frame loop
+    cartography.css        paint, keyed by [data-mode]
+  zoom/
+    camera.ts              the fly-in/out nesting-matrix math and the depth rule
+    clusters.ts             galaxy-level geometry: seeded star clusters, the cosmic web
+    ZoomMap.tsx             the renderer: four depths, the camera, interaction
+    zoom.css                paint, keyed by [data-mode]
+
 shell/
   AppShell.tsx           grid: topbar / rail / view / inspector / statusbar
   TopBar.tsx             logo, project name, ModeDial, KernelStatus
@@ -70,10 +93,11 @@ shell/
   Rail.tsx               Map, Notebook, Crew, Comms, Settings
   Inspector.tsx          variables panel (v1: names/types/values from a kernel introspection call)
   StatusBar.tsx          cell counts, star date clock
+  NotConnectedCard.tsx   "not connected" card (Connect / Settings), shared by Home and Map
 
 views/
   NotebookView.tsx       open/create notebooks from the workspace, hosts <Notebook/>
-  MapView.tsx            placeholder until the map milestone
+  MapView.tsx            the map: composes map/store + the renderer seam + MapExplorer + MapHud, handles fixture / not-connected / loading / empty
   CrewView.tsx           placeholder
   CommsView.tsx          placeholder
   SettingsView.tsx       server URL + token, skin per mode, reduced motion
@@ -385,9 +409,327 @@ The agent is a peer of the notebook, not a wrapper around it: closing the
 panel never affects a running notebook, and the notebook store has no
 knowledge of the agent.
 
+## Map (M8.5 shape: one map per mode, plus the explorer column)
+
+M8.5 replaced the single chart with **one renderer per theme mode**, plus a
+persistent explorer column beside the stage. `map/renderer.ts` is the seam
+between them and everything else, and it is authoritative — subagents build
+to it, they do not change it:
+
+```ts
+export type MapMethod = 'cartography' | 'zoom' | 'chart';
+
+/** Paper and Bridge draw charts; Night Ops and Cockpit fly — unless `override` pins this mode to something else. */
+export function rendererForMode(mode: Mode, override?: Partial<Record<Mode, MapMethod>>): MapMethod;
+
+/** The three map styles, for Settings' per-mode pickers. */
+export const MAP_METHODS: { id: MapMethod; label: string; blurb: string }[];
+
+export interface MapRendererProps {
+  dir: string;                                   // the system on screen; '' is the workspace root
+  bodies: Body[];                                // laid out by model.layoutSystem (a renderer may ignore orbit/phase)
+  childrenOf: Record<string, BodyInput[]>;       // cached, hidden-filtered listings of this system's folder bodies
+  descendants: Record<string, number>;           // known descendant counts per folder path; partial, grows as listings arrive
+  statuses: Record<string, BodyStatus>;
+  flightPath: string[];                          // recent notebooks in this system, newest first
+  selected: string | null;
+  hovered: string | null;
+  query: string;                                 // filter text; non-matching bodies dim, matching ones light up
+  themeMode: Mode;
+  reduced: boolean;
+  connected: boolean;
+  anyBusy: boolean;
+  systemLabel: string;                           // basename of dir, or "workspace" at the root
+
+  onSelect(path: string | null): void;           // click, or keyboard focus + Space; null clears
+  onHover(path: string | null): void;
+  onOpen(path: string, kind: BodyKind): void;    // double click or Enter on a notebook/file
+  onDive(dir: string): void;                     // double click or Enter on a folder: it becomes the system on screen
+}
+```
+
+The interaction rule every renderer follows, so the map and the explorer
+never disagree (`RENDERER_INTERACTION_RULE`): click a body selects, click
+empty stage clears; double-click or Enter opens a notebook/file or dives into
+a folder; a selected folder is the renderer's "focused" body — cartography
+fans its children out as moons, zoom brightens the cluster — **selection is
+focus**; Esc is handled by the view, not the renderer. Renderers never touch
+the stores: everything they need arrives as props, everything they decide
+goes back through the callbacks, which is what lets each one be built and
+tested against one fixture in isolation.
+
+`map/renderers.ts` maps `MapMethod` to a component: `cartography` →
+`CartographyMap`, `zoom` → `ZoomMap`, `chart` → `ChartMap` (the original M8
+orbital chart, now living in `MapCanvas.tsx`, kept as a third style with its
+own Chart/Orbit setting). The default is per theme mode — Paper and Bridge
+get cartography, Night Ops and Cockpit get zoom — but the owner can override
+any mode from Settings' "Map style" section (one select per mode, default
+marked); the override lives in `useMapStore().methodByMode`
+(`setMethodForMode(mode, method | null)`, `null` clears back to the default),
+persisted under `orbital.map`, and is also reachable from the palette
+(`map.cycleStyle`). `useMapMethod()` reads the effective method for the
+current theme mode.
+
+`views/MapView.tsx` is the one place that talks to the map store: it composes
+the data hooks into `MapRendererProps`, picks the component with
+`rendererForMode(themeMode)`, and renders `<CartographyMap/>` |
+`<ZoomMap/>` | `<ChartMap/>` in `.map-stage` beside `<MapExplorer/>` in
+`.map-explorer` — a real flex column (320px, a bottom strip under 720px),
+not an overlay, so renderers center in the stage without reserving HUD
+space. The breadcrumb and legend still overlay the stage's corners
+(`MapHud.tsx`); the toolbar and detail card moved into the explorer.
+
+### The viewport camera (`map/viewport.ts`, `map/useViewport.ts`)
+
+Every renderer draws inside one `<g class="viewport">` whose CSS transform is
+a `Camera { x, y, k }` (screen = world·k + (x, y)). `viewport.ts` is pure and
+node-tested: `panBy`, `zoomAt` (about a screen point, k clamped to
+`K_MIN` 0.35 … `K_MAX` 3), `centerOn`, `fitBox`, `clampToBounds` (content may
+be pushed at most 60 % off the view), `screenToWorld`, `cameraTransform`.
+`useViewport(opts)` owns the interaction: a pointer drag pans after a 4 px
+threshold (pointer capture, touch too, `is-dragging` on the `<svg>` for the
+cursor), the wheel zooms about the cursor through a native non-passive
+listener, double-click on empty stage fits, and the click that ends a drag is
+swallowed in the capture phase so a drag never selects or clears. `fit()`,
+`reset()`, `zoomIn()`, `zoomOut()` tween over 280 ms unless motion is reduced;
+a `resetKey` (the renderer passes `dir`) restores the `initial` camera on
+dive. The hook subscribes to `useMapStore`'s `viewportNonce`, `resetNonce`,
+`zoomNonce` and `panRequest`, which the HUD's `⤢ fit` button, the palette
+(`map.fitView`) and the view's keys (`F`, `+`/`-`, `0`, arrows) drive, so no
+renderer wires keys itself. Labels keep a constant screen size at k ≥ 1 by a
+`--inv-k` custom property (`scale(min(1, 1/k))` about the label anchor);
+`textPath` captions scale their font size instead.
+
+Renderers lay out into a plate larger than the stage and open centred on the
+star at 1:1, so the owner drags to explore: cartography spreads by 1.7 with
+worlds at their full 90–170 px (the fit-to-stage shrink is gone and the layout
+exports its bounds for fit and clamp), the zoom method spreads the galaxy by
+1.5 and systems and moons by 1.25, the chart by 1. Label de-collision still
+solves at k = 1 in world units.
+
+### The explorer column (`map/MapExplorer.tsx`)
+
+Always lists exactly one folder, so the map and the column can never
+disagree about what is on screen. The rule (`explorerFolder`, pure, tested):
+the **selected folder**, else the **folder containing the selected
+notebook/file**, else the **system on screen** (`dir`). Header: breadcrumb,
+filter input (`/` focuses it), hidden-files toggle. Fact block: a selected
+body's facts as the old detail card showed them (name, kind/size/modified,
+kernel row with LED, cells, unsaved, open-in-a-tab), or the folder's own
+counts when nothing is selected. Rows: kind glyph, display name, muted
+relative time, a status LED when the entry has a kernel, a halo dot when
+open; single click selects (the map's focus follows; a child of a selected
+folder becomes the selection too, drawn as the renderer's focused moon),
+double-click or Enter opens or dives. Rows are keyboard-navigable (roving
+tabindex, ↑/↓, Enter, Esc back to the stage). A primary action row offers
+Open/Enter for the selection, then `＋ Notebook` / `＋ Folder` / `＋ File`
+acting in the **listed** folder — the `create*Here` helpers in `map/store.ts`
+now take a target folder, defaulting to `dir` for the palette commands.
+`Reveal in files` is gone from the map (the palette command remains).
+
+### Store hooks added for the explorer
+
+`map/store.ts` gained four hooks and a pure helper, alongside the existing
+ones: `useChildrenOf(bodies)` returns cached, hidden-filtered listings of a
+system's folder bodies keyed by path (a missing key means "not loaded yet",
+which is what lets cartography draw an unopened world and zoom draw a
+cluster's stars); `useDescendantCounts(bodies)` sums every cached level below
+each folder body (via the pure `sumDescendants`) and prefetches one level
+deeper than `useSystemBodies` already does, bounded by `PREFETCH_LIMIT`;
+`useFolderListing(path)` is the explorer's own listing — whatever folder
+`explorerFolder` picked, which is often not the system on screen — loading it
+on demand and staying fixture-aware; `fixtureListing(tree, path, showHidden)`
+is the pure per-folder read every one of these shares against `?fixture=1`'s
+canned tree.
+
+### The three renderers
+
+**Cartography** (`map/cartography/layout.ts`, `sigils.ts`,
+`CartographyMap.tsx`; Paper and Bridge) draws each folder as a **world**
+(90–170px before an overall fit, log-scaled by descendant count), root
+notebooks in the star's inner court, files along a drift belt, a star sigil,
+and an orrery ring of seeded runes around the court. `layout.ts` is a pure,
+deterministic composition solver, not a hand-placed picture: golden-angle
+seeds on a tilted ellipse at a radius from `orbitFor(age)` (distance from the
+star still encodes age), 60 Gauss–Seidel relaxation passes against the
+worlds/court/belt, then an iterative uniform fit that only shrinks, with
+labels through `model.placeLabels`. Connectors join same-band worlds
+(capped at 8) plus up to 4 "wake" threads through consecutive flight-path
+entries, each carrying glyph beads and a direction tick. Bridge paints five
+characters by a hash of the name (storm, banded, ice-capped, ringed,
+cratered) with atmosphere halos, light-thread connectors, and an orrery ring
+that turns once per ten minutes in CSS, its beads walked by a
+`requestAnimationFrame` loop that runs only in Bridge and never under
+reduced motion. Paper paints **abstract sigils** instead — astrolabe,
+rosette, lattice, volvelle, constellation-disc — in hatch and stipple fills
+with ink hairlines and gold leaf (`accent-2`) reserved for the star sigil and
+direction ticks; no shading, no motion. Selection is focus: the selected
+world moves to the plate's centre at 1.4×, everything else dims to 15%, and
+its `childrenOf` entries fan out as labelled moons (capped 10, `+n more`).
+
+**Zoom** (`map/zoom/camera.ts`, `clusters.ts`, `ZoomMap.tsx`; Night Ops and
+Cockpit) keys depth off `dir` (root = depth 1) and flies between four levels:
+galaxy (folders as seeded spiral/elliptical clusters, points from
+descendants capped at 160, tinted by band, a cosmic web between same-band
+folders, a `loose files` field of individually selectable motes), system
+(subfolders as painted planets sized by child count, bright notebooks,
+asteroid files remapped onto an annulus so nothing hides under the local
+star), moons (a large central disc, this folder's entries as labelled moons,
+subfolders as outposts), and, beyond depth 3, the plain chart with
+`textPath` captions. `camera.ts` is the pure math behind the fly-in/out: one
+camera group, a nesting matrix so the arriving level starts pre-shrunk
+inside the clicked body, an 800ms fly with a 600ms fade (200ms trail), and a
+rebase back to identity that is pixel-identical (`cam · nest = I`) so
+transitions never accumulate scale; reduced motion swaps instantly. Night
+Ops paints calm and unlit, no CSS animation; Cockpit paints a tactical scope
+— range rings with tick scales, bracketed contacts, corner brackets and LEDs
+on planets, mono uppercase labels with `BRG`/`RNG` readouts for the
+hovered/selected contact, a sweep on the selected ring, ambient rotation only
+here via the `requestAnimationFrame` loop.
+
+**Chart** (`MapCanvas.tsx`, exporting `ChartMap`; the original M8 view,
+available from any mode as the third style) is unchanged: the current
+directory as a star system, orbit radius encoding recency on the log scale
+below, notebooks as discs, directories as ringed planets with moon dots,
+files as asteroids, live open/active/error/dirty/kernel marks on the body
+itself, a dashed flight path, and its own Chart/Orbit presentation
+(`MapMode`) that defaults per theme mode and freezes to Chart under reduced
+motion.
+
+`map/model.ts` is pure geometry and classification — no React, no stores:
+
+```ts
+export type BodyKind = 'notebook' | 'directory' | 'file';
+export type Band = 'today' | 'week' | 'month' | 'halfyear' | 'older';
+
+export interface BodyInput {
+  path: string;
+  name: string;
+  kind: BodyKind;
+  modifiedAt: number;      // epoch ms
+  bytes?: number;          // notebooks and files
+  childCount?: number;     // directories, when their listing is cached
+  moons?: string[];        // directories: names of notebooks inside (first 6), when cached
+}
+
+export interface Body extends BodyInput {
+  band: Band;
+  orbit: number;           // ORBIT_MIN..1, fraction of the system radius
+  phase: number;           // radians, the body's angle in Chart mode
+  periodMs: number;        // Kepler's third law from `orbit`
+  scale: number;           // 0.75..1.5 visual multiplier
+}
+
+export function hashString(s: string): number;
+export function seededRng(seed: number): () => number;
+export function bandFor(ageMs: number): Band;
+export function orbitFor(ageMs: number): number;              // log-scaled age → orbit
+export function ringOrbit(band: Exclude<Band, 'older'>): number;
+export function periodFor(orbit: number): number;
+export function scaleFor(input: BodyInput): number;
+export function makeBody(input: BodyInput, now: number): Body;
+export function layoutSystem(inputs: BodyInput[], now: number): Body[];
+export function angleAt(body: Body, t: number, tStart: number, motion: 'frozen' | 'orbit'): number;
+export function positionAt(body: Body, t: number, tStart: number, motion: 'frozen' | 'orbit'): { x: number; y: number };
+export function entriesToBodyInputs(
+  entries: ContentsEntry[],
+  entriesByDir: Record<string, ContentsEntry[]>,
+  showHidden: boolean,
+): BodyInput[];
+export function displayName(body: Pick<Body, 'name' | 'kind'>): string;
+export function formatBytes(n: number): string;
+export function asteroidPath(path: string, r: number): string;  // 6-vertex outline, jittered by hashString(path)
+```
+
+`map/store.ts` is the zustand store and the derived hooks that feed the canvas:
+
+```ts
+export type MapMode = 'chart' | 'orbit';
+
+export interface MapState {
+  dir: string;                    // current system; '' = workspace root
+  mode: MapMode | null;           // null → follow the theme mode (chart renderer only)
+  methodByMode: Partial<Record<Mode, MapMethod>>;  // M8.5: per-mode style override; see "Map (M8.5 shape)" above
+  showHidden: boolean;
+  selected: string | null;
+  hovered: string | null;
+  query: string;
+  dive(dir: string): void;
+  up(): void;
+  setMode(mode: MapMode | null): void;
+  toggleMode(): void;             // flips relative to the effective mode and pins the result
+  setMethodForMode(mode: Mode, method: MapMethod | null): void;  // null clears back to rendererForMode's default
+  setShowHidden(v: boolean): void;
+  select(path: string | null): void;
+  hover(path: string | null): void;
+  setQuery(q: string): void;
+  open(path: string, kind: BodyKind): void;   // notebook/file → the matching store; directory → dive
+}
+export const useMapStore;         // persisted under 'orbital.map': { mode, methodByMode, showHidden, dir }
+export function effectiveMapMode(mode: MapMode | null, themeMode: Mode): MapMode;
+export function useEffectiveMapMode(): MapMode;
+export function useMapMethod(): MapMethod;      // M8.5: which of the three styles draws the current theme mode
+export function useSystemBodies(): { bodies: Body[]; loading: boolean; error: string | null };
+
+export interface BodyStatus {
+  open: boolean; active: boolean; dirty: boolean;
+  kernel: KernelStatus | null;
+  errors: number;
+  running: number;
+}
+export function useBodyStatuses(bodies: Body[]): Record<string, BodyStatus>;
+export function useFlightPath(bodies: Body[]): string[];       // ≤ 6 most recently opened notebooks, newest last
+export function setMapFixture(tree: Record<string, BodyInput[]> | null, statuses?: Record<string, Partial<BodyStatus>>): void;
+```
+
+`useChildrenOf`, `useDescendantCounts`, `useFolderListing`, and
+`fixtureListing` (M8.5, for the explorer column) are described above under
+"Store hooks added for the explorer" rather than repeated here.
+
+Rendering is SVG for structure, drawn by React, plus one `requestAnimationFrame`
+loop for motion, not PixiJS — the same choice recorded in the decision summary
+above, and the one every renderer makes independently (cartography's bead
+walk, zoom's ambient rotation, chart's orbit motion). The chart renderer's
+loop never touches React state: it mutates `transform` / `d` / `points` /
+`class` directly on SVG elements held in a `Map<path, SVGGElement>` of refs,
+and it runs only while `mode === 'orbit'`, motion is not reduced, the tab is
+visible, and `MapCanvas` is mounted. Fills, strokes, and opacities live in
+`map.css` (or `cartography.css` / `zoom.css`) as classes, never as SVG
+presentation attributes, so `var()` and `color-mix()` keep working (the
+gradient/pattern `fill="url(#…)"` references are the one exception; their
+stops still pull color from CSS).
+
+Data flow: `useSystemBodies()` reads the current directory's entries from
+`files/store.ts` (loading them if not cached), prefetches up to 24 uncached
+child directories so moon counts and child counts fill in, and re-lists the
+current directory every 30 seconds while mounted. `useBodyStatuses()` derives
+open/active/dirty/kernel/error/running state per body from the notebook,
+files, and tabs stores. `MapHud.tsx` reads the same store for the breadcrumb
+and legend; `MapExplorer.tsx` reads it for the folder listing, the fact
+block, and the create row. The fixture seam: `?fixture=1` calls
+`setMapFixture()` with a canned tree from `map/fixture.ts` so every renderer,
+and the explorer, render with no server running; `setMapFixture(null)` on
+unmount restores the real data path.
+
+Small contract additions elsewhere:
+
+- `session/types.ts`: `ContentsEntry` gains `size?: number` (bytes; undefined
+  for directories); `session/jupyter.ts` passes it through from the contents
+  listing.
+- `notebook/store.ts`: `kernelByPath: Record<string, KernelStatus>`, written
+  for every open notebook's session status (not just the active one) and
+  cleared when that notebook closes, so the map can show kernel state for
+  bodies that are not the active tab.
+- `files/store.ts`: `revealPath(path)`, showing the file browser, expanding
+  every ancestor of `path`, and selecting it; `shell/commands.ts`'s
+  `files.revealActive` now calls it instead of carrying its own loop.
+- `theme/ThemeProvider.tsx`: `useReducedMotion()`, exposing the same
+  `motion`-store-plus-`prefers-reduced-motion` check the provider already
+  applies internally, so the map (and anything else) can read it without
+  duplicating the logic.
+
 ## Later milestones (not designed yet)
 
-- **Map view**: PixiJS canvas, projects as bodies, minimalist and full modes.
 - **Sprite customizer**: layered SVG parts, exported sprite sheet, state-driven animations.
 - **Hub service**: FastAPI, accounts, presence over WebSocket, project metadata, shared sessions.
 - **Desktop**: Tauri shell that starts the local Jupyter Server and opens the app.

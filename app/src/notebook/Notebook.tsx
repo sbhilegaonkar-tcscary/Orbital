@@ -15,8 +15,9 @@ import { useNotebookStore, useActiveNotebook } from './store';
 import { Cell } from './Cell';
 import { editorRegistry, toggleLineNumbers } from './editorRegistry';
 import { useAutosaveStatus } from './autosave';
-import { ShortcutsHelp } from '../shell/ShortcutsHelp';
-import { openShortcutsHelp, closeShortcutsHelp, useShortcutsHelpOpen } from '../shell/shortcuts';
+// The overlay itself is mounted once, by `shell/AppShell.tsx`, so every view
+// (the map included) can open it; this file only asks for it.
+import { openShortcutsHelp } from '../shell/shortcuts';
 import './notebook.css';
 
 const DELETE_CHORD_MS = 500;
@@ -189,7 +190,6 @@ export function Notebook() {
   const runBelow = useNotebookStore((s) => s.runBelow);
 
   const autosaveStatus = useAutosaveStatus();
-  const helpOpen = useShortcutsHelpOpen();
 
   const lastDeleteRef = useRef(0);
 
@@ -337,14 +337,11 @@ export function Notebook() {
   if (!notebook) return <div className="notebook-empty">No notebook open.</div>;
 
   return (
-    <>
-      <div className="notebook" onKeyDown={handleKeyDown}>
-        {autosaveStatus && <div className="autosave-status">{autosaveStatus}</div>}
-        {notebook.cells.map((cell) => (
-          <Cell key={cell.id} cell={cell} selected={cell.id === selectedCellId} onSelect={() => select(cell.id)} />
-        ))}
-      </div>
-      <ShortcutsHelp open={helpOpen} onClose={closeShortcutsHelp} />
-    </>
+    <div className="notebook" onKeyDown={handleKeyDown}>
+      {autosaveStatus && <div className="autosave-status">{autosaveStatus}</div>}
+      {notebook.cells.map((cell) => (
+        <Cell key={cell.id} cell={cell} selected={cell.id === selectedCellId} onSelect={() => select(cell.id)} />
+      ))}
+    </div>
   );
 }

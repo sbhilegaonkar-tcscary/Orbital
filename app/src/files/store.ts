@@ -17,10 +17,11 @@
  * `notebook/store.ts`.
  */
 import { create } from 'zustand';
-import { useSessionStore } from '../session/store';
+import { connectionMessage, useSessionStore } from '../session/store';
 import type { ContentsEntry, SessionProvider } from '../session/types';
 import { useNotebookStore } from '../notebook/store';
 import { useTabsStore } from '../shell/tabs';
+import { useLayoutStore } from '../shell/layout';
 
 export interface OpenFileDoc {
   text: string;
@@ -72,14 +73,15 @@ function errorMessage(e: unknown): string {
 
 export const useFilesStore = create<FilesState>((set, get) => {
   /**
-   * The connected provider, or null after recording 'Not connected'. Every
-   * action funnels through this so a disconnected store reports instead of
-   * throwing.
+   * The connected provider, or null after recording why there isn't one.
+   * Every action funnels through this so a disconnected store reports
+   * instead of throwing; while the session is still dialling, the message
+   * says so rather than claiming a flat refusal.
    */
   function requireProvider(): SessionProvider | null {
     const provider = useSessionStore.getState().provider;
     if (!provider) {
-      set({ error: 'Not connected' });
+      set({ error: connectionMessage() });
       return null;
     }
     set({ error: null });
@@ -308,6 +310,25 @@ export const useFilesStore = create<FilesState>((set, get) => {
     select: (path) => set({ selected: path }),
   };
 });
+
+/**
+ * Shows the file browser, expands every ancestor of `path`, selects it.
+ * Shared by `shell/commands.ts`'s `files.revealActive` and the map's detail
+ * card, so the "reveal" behaviour has one definition.
+ *
+ * `shell/layout.ts` imports nothing from this module, so reaching for it here
+ * introduces no init cycle.
+ */
+export function revealPath(path: string): void {
+  useLayoutStore.getState().setVisible('files', true);
+  const parts = path.split('/');
+  let dir = '';
+  for (let i = 0; i < parts.length - 1; i += 1) {
+    dir = dir ? `${dir}/${parts[i]}` : parts[i];
+    if (!useFilesStore.getState().expanded.includes(dir)) useFilesStore.getState().toggleDir(dir);
+  }
+  useFilesStore.getState().select(path);
+}
 
 /** Saves the currently-active file tab, if there is one. Called by files.saveActive and by notebook.save's wrapper (other agents wire those commands). */
 export function saveActiveFile(): void {

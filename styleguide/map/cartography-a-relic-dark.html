@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Map / Cartography A / Relic (dark)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Orbitron:wght@600&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* Map: Cartography — Variant A: Relic (Bridge / Nebula Drift tokens) */
+  --bg: #090a17;
+  --surface: #12142a;
+  --surface-2: #1a1d3a;
+  --border: #33366a;
+  --text: #e8e9fb;
+  --text-muted: #9497c4;
+  --accent: #4fd8e8;
+  --accent-2: #b98af0;
+  --success: #4fe8a6;
+  --warning: #f0c85a;
+  --danger: #f2607e;
+  --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', Consolas, 'Courier New', monospace;
+  --font-display: 'Orbitron', 'Inter', sans-serif;
+  --radius: 10px;
+  --glow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent), 0 0 28px color-mix(in srgb, var(--accent-2) 22%, transparent);
+
+  /* sky, carried straight from Nebula Drift */
+  --nebula-1: #5a33ad;
+  --nebula-2: #1f86a8;
+  --nebula-3: #922c74;
+  --star-rgb: 232, 236, 255;
+
+  /* five painted characters: lit face, mid body, deep limb, rim light */
+  --w0-lit: #8fe6ff; --w0-mid: #2b6dba; --w0-deep: #0d1a46; --w0-rim: #63d3ff;
+  --w1-lit: #ffd694; --w1-mid: #cf5f43; --w1-deep: #33102c; --w1-rim: #ffab5e;
+  --w2-lit: #ecfdff; --w2-mid: #74c9da; --w2-deep: #123049; --w2-rim: #a8f0ff;
+  --w3-lit: #f3ccff; --w3-mid: #9863da; --w3-deep: #200f42; --w3-rim: #cd93ff;
+  --w4-lit: #d6dcf4; --w4-mid: #656a94; --w4-deep: #14172f; --w4-rim: #a8b0da;
+
+  --rail-w: 88px;
+  --plaque-w: 312px;
+  --panel: color-mix(in srgb, var(--surface) 74%, transparent);
+}
+
+/* ======================================================================
+   SKELETON - identical in both versions: layout, geometry, type scale.
+   Nothing below the token block names a colour except through a token.
+   ====================================================================== */
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 400 13px/1.5 var(--font-ui);
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* ---- sky layer (the paint decides what it looks like) ------------------ */
+.sky { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.cloud { position: absolute; width: 70vw; height: 70vw; border-radius: 50%; }
+.cloud.c1 { left: -22vw; top: -34vw; }
+.cloud.c2 { right: -26vw; top: 0vw; }
+.cloud.c3 { left: 16vw; bottom: -48vw; }
+.stars { position: absolute; inset: -10%; width: 1px; height: 1px; border-radius: 50%; background: transparent; }
+.streak { position: absolute; top: 15%; left: 58%; width: 150px; height: 1px; transform: rotate(-26deg); opacity: 0; }
+
+/* ---- spec strip -------------------------------------------------------- */
+.spec-strip {
+  position: relative; z-index: 1;
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 22px;
+  align-items: center;
+  padding: 9px 18px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.spec-strip h1 { margin: 0 0 2px; font-size: 12px; font-weight: 600; }
+.spec-strip p { margin: 0; color: var(--text-muted); max-width: 68ch; }
+.swatches { display: flex; gap: 6px; }
+.swatch { display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--text-muted); font-size: 9.5px; }
+.swatch i { width: 18px; height: 18px; border: 1px solid var(--border); display: block; border-radius: calc(var(--radius) / 2); }
+.fonts { color: var(--text-muted); white-space: nowrap; }
+.fonts b { color: var(--text); font-weight: 500; }
+
+/* ---- app frame --------------------------------------------------------- */
+.app {
+  position: relative; z-index: 1;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--plaque-w);
+  grid-template-rows: 52px minmax(0, 1fr) 26px;
+  grid-template-areas:
+    "topbar topbar topbar"
+    "rail map plaque"
+    "status status status";
+}
+
+/* Below 1152px the chart is width-bound, so the chrome gives it back room. */
+@media (max-width: 1152px) { :root { --plaque-w: 268px; --rail-w: 76px; } }
+
+.topbar { grid-area: topbar; display: flex; align-items: center; gap: 18px; padding: 0 18px; border-bottom: 1px solid var(--border); }
+.logo { font: 600 13px/1 var(--font-display); letter-spacing: 0.24em; }
+.project-name { font: 400 12.5px/1 var(--font-mono); color: var(--text-muted); }
+.project-name b { color: var(--text); font-weight: 500; }
+.mode-dial { margin-left: auto; display: flex; gap: 4px; }
+.mode-dial span { padding: 6px 12px; color: var(--text-muted); font-size: 12px; border: 1px solid transparent; }
+.kernel-status { display: flex; align-items: center; gap: 8px; font: 400 12px/1 var(--font-mono); color: var(--text-muted); }
+.kernel-status i { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+
+.rail { grid-area: rail; padding: 16px 0; display: flex; flex-direction: column; gap: 4px; border-right: 1px solid var(--border); }
+.rail-item { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 10px 0; color: var(--text-muted); font-size: 10.5px; }
+.rail-item.active { color: var(--text); }
+.rail svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+
+.statusbar { grid-area: status; display: flex; justify-content: space-between; align-items: center; padding: 0 18px; border-top: 1px solid var(--border); color: var(--text-muted); font: 400 11px/1 var(--font-mono); }
+
+/* ---- map view ---------------------------------------------------------- */
+.map { grid-area: map; position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+.chart { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.chart text { user-select: none; }
+
+.map-hint {
+  position: absolute; left: 14px; top: 12px;
+  padding: 7px 11px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font: 400 9.5px/1.6 var(--font-mono);
+  letter-spacing: 0.13em; text-transform: uppercase;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.map-hint b { display: block; color: var(--text); font-weight: 500; letter-spacing: 0.2em; margin-bottom: 2px; }
+
+/* ---- plaque ------------------------------------------------------------ */
+.plaque { grid-area: plaque; min-height: 0; display: flex; flex-direction: column; padding: 16px 18px 14px; border-left: 1px solid var(--border); overflow: hidden; }
+.plaque-kind { font: 400 9.5px/1 var(--font-mono); letter-spacing: 0.22em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 9px; }
+.plaque-name { margin: 0 0 3px; font: 600 17px/1.2 var(--font-display); letter-spacing: 0.02em; word-break: break-word; }
+.plaque-sub { font: 400 11px/1.5 var(--font-mono); color: var(--text-muted); margin-bottom: 13px; }
+.plaque-rule { height: 1px; background: var(--border); margin: 0 0 12px; }
+.plaque-stats { display: grid; grid-template-columns: 1fr auto; gap: 5px 10px; margin: 0 0 14px; }
+.plaque-stats dt { font: 400 10.5px/1.4 var(--font-mono); color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase; margin: 0; }
+.plaque-stats dd { margin: 0; font: 500 12px/1.4 var(--font-mono); text-align: right; font-variant-numeric: tabular-nums; }
+.plaque-h { font: 400 9.5px/1 var(--font-mono); letter-spacing: 0.2em; text-transform: uppercase; color: var(--text-muted); margin: 0 0 8px; }
+.plaque-recent { list-style: none; margin: 0 0 auto; padding: 0; }
+.plaque-recent li { display: grid; grid-template-columns: 13px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 5px 0; border-top: 1px solid var(--border); font: 400 11.5px/1.4 var(--font-mono); }
+.plaque-recent li:last-child { border-bottom: 1px solid var(--border); }
+.plaque-recent .g { font-size: 10px; text-align: center; }
+.plaque-recent .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plaque-recent .t { color: var(--text-muted); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.plaque-actions { display: flex; gap: 8px; margin-top: 16px; }
+.pbtn { flex: 1 1 auto; padding: 8px 6px; font: 500 11px/1 var(--font-mono); letter-spacing: 0.09em; text-transform: uppercase; border: 1px solid var(--border); border-radius: var(--radius); background: transparent; color: var(--text); cursor: pointer; }
+.plaque-foot { margin-top: 11px; font: 400 10px/1.5 var(--font-mono); color: var(--text-muted); }
+
+/* ---- svg geometry: identical in both ----------------------------------- */
+.band-arc { fill: none; stroke-width: 1; }
+.band-cap { font: 400 9.5px/1 var(--font-mono); letter-spacing: 0.24em; text-transform: uppercase; }
+.orrery-ring { fill: none; stroke-width: 1; }
+.orrery-tick { stroke-width: 1; }
+.rune { fill: none; stroke-width: 1.05; stroke-linecap: round; stroke-linejoin: round; }
+.thread-core { fill: none; stroke-width: 1.15; }
+.thread-flow { fill: none; stroke-width: 2.2; stroke-linecap: round; }
+.bead { fill: none; stroke-width: 1.05; stroke-linecap: round; stroke-linejoin: round; }
+.bead-dot { stroke: none; }
+.dir-tick { fill: none; stroke-width: 1.35; stroke-linecap: round; stroke-linejoin: round; }
+.belt-path { fill: none; stroke-width: 1; }
+.belt-tick { stroke-width: 1; }
+.mote { stroke-width: 0.8; }
+.belt-cap { font: 400 9.5px/1 var(--font-mono); letter-spacing: 0.22em; text-transform: uppercase; }
+.star-ring { fill: none; stroke-width: 1.1; }
+.star-ray { stroke-width: 1.1; stroke-linecap: round; }
+.star-glyph { fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.star-name { font: 600 13px/1 var(--font-display); letter-spacing: 0.15em; text-anchor: middle; }
+.star-sub { font: 400 10px/1 var(--font-mono); letter-spacing: 0.18em; text-anchor: middle; }
+.nb-body { stroke-width: 1; }
+.nb-halo { fill: none; stroke-width: 1.1; }
+.nb-lead { fill: none; stroke-width: 1; }
+.nb-term { stroke-width: 1; }
+.nb-label { font: 400 11.5px/1 var(--font-mono); text-anchor: middle; }
+.world { cursor: pointer; }
+.w-atmo { stroke: none; }
+.w-rim { fill: none; stroke-width: 1.4; }
+.w-term { stroke: none; }
+.w-lead { fill: none; stroke-width: 1; }
+.w-sq { stroke-width: 1; }
+.w-name { font: 600 17px/1 var(--font-display); letter-spacing: 0.035em; }
+.w-cap { font: 400 11.5px/1 var(--font-mono); }
+.w-ring { fill: none; stroke-width: 1.2; }
+.w-ringfront { fill: none; stroke-width: 2; }
+.crater-o, .crater-i, .band, .storm, .storm-eye, .cap-ice, .maria, .w-base { stroke: none; }
+.storm-swirl { fill: none; stroke-width: 1.1; }
+.moons { opacity: 0; pointer-events: none; }
+.moon-orbit { fill: none; stroke-width: 1; }
+.moon-lead { fill: none; stroke-width: 0.8; }
+.moon-dot { stroke-width: 1; }
+.moon-label { font: 400 8.5px/1 var(--font-mono); }
+
+/* ---- focus and hover states -------------------------------------------- */
+.chart.has-focus .bg-art,
+.chart.has-focus .orrery,
+.chart.has-focus .threads,
+.chart.has-focus .belt,
+.chart.has-focus .star,
+.chart.has-focus .court { opacity: 0.1; }
+.chart.has-focus .world:not(.is-focused) { opacity: 0.12; }
+.chart.has-focus .w-label { opacity: 0; }
+.world { transform-box: view-box; transform-origin: var(--ox) var(--oy); }
+.world.is-focused { transform: translate(var(--fx), var(--fy)) scale(1.6); }
+.world.is-focused .moons { opacity: 1; }
+
+:root:not([data-motion='reduced']) .world,
+:root:not([data-motion='reduced']) .moons,
+:root:not([data-motion='reduced']) .bg-art,
+:root:not([data-motion='reduced']) .orrery,
+:root:not([data-motion='reduced']) .threads,
+:root:not([data-motion='reduced']) .belt,
+:root:not([data-motion='reduced']) .star,
+:root:not([data-motion='reduced']) .court,
+:root:not([data-motion='reduced']) .w-label {
+  transition: transform 350ms cubic-bezier(0.22, 0.72, 0.2, 1), opacity 350ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+  .streak { display: none; }
+}
+
+/* ======================================================================
+   PAINT - Relic. Defining moves: luminous painted worlds with subsurface
+   glow and atmosphere rims; nebula washes behind; threads of light strung
+   with glyph beads; an orrery ring of alien script turning once per ten
+   minutes.
+   ====================================================================== */
+
+/* ---- sky --------------------------------------------------------------- */
+.cloud { opacity: 0.85; will-change: transform; }
+.cloud.c1 { background: radial-gradient(closest-side, var(--nebula-1), transparent 68%); }
+.cloud.c2 { background: radial-gradient(closest-side, var(--nebula-2), transparent 68%); }
+.cloud.c3 { background: radial-gradient(closest-side, var(--nebula-3), transparent 68%); }
+.stars.far { opacity: 0.5; }
+.stars.near { opacity: 0.88; }
+.streak { background: linear-gradient(90deg, transparent, var(--text), transparent); }
+
+@keyframes drift1 { to { transform: translate(9vw, 6vw) rotate(12deg); } }
+@keyframes drift2 { to { transform: translate(-8vw, 9vw) rotate(-10deg); } }
+@keyframes drift3 { to { transform: translate(-10vw, -7vw) rotate(8deg); } }
+@keyframes parallax { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-80px, 40px, 0); } }
+@keyframes streak {
+  0% { opacity: 0; transform: rotate(-26deg) translateX(0); }
+  2% { opacity: 0.9; }
+  6%, 100% { opacity: 0; transform: rotate(-26deg) translateX(-440px); }
+}
+@keyframes orrery { to { transform: rotate(360deg); } }
+@keyframes flow { to { stroke-dashoffset: -96; } }
+@keyframes corepulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+
+:root:not([data-motion='reduced']) .cloud.c1 { animation: drift1 120s ease-in-out infinite alternate; }
+:root:not([data-motion='reduced']) .cloud.c2 { animation: drift2 150s ease-in-out infinite alternate; }
+:root:not([data-motion='reduced']) .cloud.c3 { animation: drift3 135s ease-in-out infinite alternate; }
+:root:not([data-motion='reduced']) .stars.far { animation: parallax 240s linear infinite; }
+:root:not([data-motion='reduced']) .stars.near { animation: parallax 120s linear infinite; }
+:root:not([data-motion='reduced']) .streak { animation: streak 16s linear infinite; animation-delay: 4s; }
+:root:not([data-motion='reduced']) .orrery { animation: orrery 600s linear infinite; }
+:root:not([data-motion='reduced']) .thread-flow { animation: flow 9s linear infinite; }
+:root:not([data-motion='reduced']) .star-core { animation: corepulse 4.5s ease-in-out infinite; }
+
+/* ---- chrome ------------------------------------------------------------ */
+.spec-strip { background: color-mix(in srgb, var(--surface) 85%, transparent); border-bottom-color: var(--border); }
+.swatch i { border-radius: 4px; }
+.topbar {
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--border) 70%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.logo {
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.mode-dial span { border-radius: 999px; }
+.mode-dial span.active {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.kernel-status i { box-shadow: 0 0 10px var(--success); }
+.rail { border-right-color: color-mix(in srgb, var(--border) 50%, transparent); }
+.rail-item.active svg { color: var(--accent); filter: drop-shadow(0 0 6px var(--accent)); }
+.rail-item.active::before {
+  content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 2px;
+  background: linear-gradient(var(--accent), var(--accent-2));
+  box-shadow: 0 0 10px var(--accent);
+}
+.statusbar {
+  border-top-color: color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+}
+.map-hint {
+  background: var(--panel);
+  border-color: color-mix(in srgb, var(--border) 70%, transparent);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+.plaque {
+  background: color-mix(in srgb, var(--surface) 44%, transparent);
+  border-left-color: color-mix(in srgb, var(--border) 50%, transparent);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.plaque-kind { color: var(--accent-2); }
+.plaque-name { background: linear-gradient(90deg, var(--text), color-mix(in srgb, var(--accent) 70%, var(--text))); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.plaque-rule { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 55%, transparent), transparent); }
+.plaque-recent li { border-top-color: color-mix(in srgb, var(--border) 70%, transparent); }
+.plaque-recent li:last-child { border-bottom-color: color-mix(in srgb, var(--border) 70%, transparent); }
+.plaque-recent .g-dir { color: var(--accent-2); }
+.plaque-recent .g-nb { color: var(--accent); }
+.plaque-recent .g-file { color: var(--text-muted); }
+.pbtn { border-color: color-mix(in srgb, var(--border) 85%, transparent); background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
+.pbtn.primary {
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+/* ---- background arcs and orrery ---------------------------------------- */
+.band-arc { stroke: color-mix(in srgb, var(--accent) 22%, transparent); stroke-dasharray: 2 7; }
+.band-arc.meridian { stroke: color-mix(in srgb, var(--accent-2) 30%, transparent); stroke-dasharray: 20 6 3 6; }
+.band-cap { fill: color-mix(in srgb, var(--text-muted) 75%, transparent); }
+.orrery-ring { stroke: color-mix(in srgb, var(--accent-2) 26%, transparent); }
+.orrery-tick { stroke: color-mix(in srgb, var(--accent) 45%, transparent); }
+.rune { stroke: color-mix(in srgb, var(--accent-2) 55%, transparent); }
+
+/* ---- threads ----------------------------------------------------------- */
+.thread-core { stroke: color-mix(in srgb, var(--accent) 52%, transparent); }
+.thread-core.t-wake { stroke: color-mix(in srgb, var(--accent-2) 52%, transparent); stroke-dasharray: 9 5; }
+.thread-flow { stroke: var(--accent); stroke-dasharray: 2 14; filter: drop-shadow(0 0 5px var(--accent)); }
+.thread-flow.t-wake { stroke: var(--accent-2); filter: drop-shadow(0 0 5px var(--accent-2)); }
+.bead { stroke: color-mix(in srgb, var(--accent) 80%, transparent); }
+.bead-g.t-wake .bead { stroke: color-mix(in srgb, var(--accent-2) 80%, transparent); }
+.bead-dot { fill: var(--text); }
+.bead-g { filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 60%, transparent)); }
+.bead-g.t-wake { filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent-2) 60%, transparent)); }
+.dir-tick { stroke: var(--warning); }
+
+/* ---- belt -------------------------------------------------------------- */
+.belt-path { stroke: color-mix(in srgb, var(--accent-2) 30%, transparent); stroke-dasharray: 14 6 2 6; }
+.belt-tick { stroke: color-mix(in srgb, var(--accent-2) 30%, transparent); }
+.mote { fill: color-mix(in srgb, var(--text) 62%, transparent); stroke: color-mix(in srgb, var(--accent) 45%, transparent); }
+.mote.derelict { fill: color-mix(in srgb, var(--text-muted) 40%, transparent); stroke: none; }
+.belt-cap { fill: color-mix(in srgb, var(--text-muted) 80%, transparent); }
+
+/* ---- star sigil -------------------------------------------------------- */
+.star-ring { stroke: color-mix(in srgb, var(--accent) 55%, transparent); }
+.star-ring.dashed { stroke-dasharray: 3 5; stroke: color-mix(in srgb, var(--accent-2) 60%, transparent); }
+.star-ray { stroke: color-mix(in srgb, var(--accent) 45%, transparent); }
+.star-ray.long { stroke: color-mix(in srgb, var(--accent-2) 65%, transparent); }
+.star-glyph { stroke: var(--accent); filter: drop-shadow(0 0 6px var(--accent)); }
+.star-core { fill: var(--text); filter: drop-shadow(0 0 9px var(--accent)); }
+.star-name { fill: var(--text); }
+.star-sub { fill: color-mix(in srgb, var(--text-muted) 85%, transparent); }
+.star { filter: drop-shadow(0 0 22px color-mix(in srgb, var(--accent) 22%, transparent)); }
+
+/* ---- court ------------------------------------------------------------- */
+.nb-body { fill: var(--accent); stroke: color-mix(in srgb, var(--text) 70%, transparent); filter: drop-shadow(0 0 7px var(--accent)); }
+.nb.is-derelict .nb-body { fill: color-mix(in srgb, var(--text-muted) 55%, transparent); filter: none; stroke: none; }
+.nb-halo { stroke: color-mix(in srgb, var(--accent) 55%, transparent); }
+.nb-halo.second { stroke: color-mix(in srgb, var(--accent-2) 55%, transparent); }
+.nb.is-busy .nb-halo { stroke: color-mix(in srgb, var(--warning) 70%, transparent); stroke-dasharray: 4 4; }
+.nb.is-dirty .nb-halo { stroke: color-mix(in srgb, var(--warning) 55%, transparent); }
+.nb-lead { stroke: color-mix(in srgb, var(--border) 90%, transparent); }
+.nb-term { fill: color-mix(in srgb, var(--accent) 65%, transparent); }
+.nb-label { fill: color-mix(in srgb, var(--text) 82%, transparent); }
+.nb.is-derelict .nb-label { fill: color-mix(in srgb, var(--text-muted) 65%, transparent); }
+
+/* ---- painted worlds ---------------------------------------------------- */
+.w-c0 { --wl: var(--w0-lit); --wm: var(--w0-mid); --wd: var(--w0-deep); --wr: var(--w0-rim); }
+.w-c1 { --wl: var(--w1-lit); --wm: var(--w1-mid); --wd: var(--w1-deep); --wr: var(--w1-rim); }
+.w-c2 { --wl: var(--w2-lit); --wm: var(--w2-mid); --wd: var(--w2-deep); --wr: var(--w2-rim); }
+.w-c3 { --wl: var(--w3-lit); --wm: var(--w3-mid); --wd: var(--w3-deep); --wr: var(--w3-rim); }
+.w-c4 { --wl: var(--w4-lit); --wm: var(--w4-mid); --wd: var(--w4-deep); --wr: var(--w4-rim); }
+
+.s0a { stop-color: var(--w0-lit); } .s0b { stop-color: var(--w0-mid); } .s0c { stop-color: var(--w0-deep); }
+.s1a { stop-color: var(--w1-lit); } .s1b { stop-color: var(--w1-mid); } .s1c { stop-color: var(--w1-deep); }
+.s2a { stop-color: var(--w2-lit); } .s2b { stop-color: var(--w2-mid); } .s2c { stop-color: var(--w2-deep); }
+.s3a { stop-color: var(--w3-lit); } .s3b { stop-color: var(--w3-mid); } .s3c { stop-color: var(--w3-deep); }
+.s4a { stop-color: var(--w4-lit); } .s4b { stop-color: var(--w4-mid); } .s4c { stop-color: var(--w4-deep); }
+.term-a { stop-color: transparent; } .term-b { stop-color: var(--bg); stop-opacity: 0.88; }
+
+.w-c0 .w-base { fill: url(#gs0); }
+.w-c1 .w-base { fill: url(#gs1); }
+.w-c2 .w-base { fill: url(#gs2); }
+.w-c3 .w-base { fill: url(#gs3); }
+.w-c4 .w-base { fill: url(#gs4); }
+
+.w-atmo { fill: var(--wr); opacity: 0.3; filter: blur(11px); }
+.w-rim { stroke: var(--wr); filter: drop-shadow(0 0 8px var(--wr)); }
+.w-term { fill: url(#gterm); }
+.w-term-c { fill: none; }
+
+.band.b0 { fill: color-mix(in srgb, var(--wl) 26%, transparent); }
+.band.b1 { fill: color-mix(in srgb, var(--wd) 40%, transparent); }
+.band.b2 { fill: color-mix(in srgb, var(--wl) 13%, transparent); }
+.band.b3 { fill: color-mix(in srgb, var(--wm) 38%, transparent); }
+.storm { fill: color-mix(in srgb, var(--wl) 45%, transparent); }
+.storm-eye { fill: color-mix(in srgb, var(--wl) 82%, transparent); }
+.storm-swirl { stroke: color-mix(in srgb, var(--wl) 55%, transparent); }
+.cap-ice { fill: color-mix(in srgb, var(--wl) 72%, transparent); }
+.maria { fill: color-mix(in srgb, var(--wd) 52%, transparent); }
+.crater-o { fill: color-mix(in srgb, var(--wd) 62%, transparent); }
+.crater-i { fill: color-mix(in srgb, var(--wl) 16%, transparent); }
+.w-ring { stroke: color-mix(in srgb, var(--wr) 55%, transparent); }
+.w-ringfront { stroke: color-mix(in srgb, var(--wr) 85%, transparent); filter: drop-shadow(0 0 6px var(--wr)); }
+
+.w-lead { stroke: color-mix(in srgb, var(--border) 95%, transparent); }
+.w-sq { fill: var(--wr); }
+.w-name { fill: var(--text); }
+.w-cap { fill: color-mix(in srgb, var(--text-muted) 92%, transparent); }
+
+.world.is-hover .w-rim { stroke-width: 2.2; filter: drop-shadow(0 0 16px var(--wr)); }
+.world.is-hover .w-atmo { opacity: 0.5; }
+.world.is-hover .w-name { fill: var(--wr); }
+
+/* ---- moons ------------------------------------------------------------- */
+.moon-orbit { stroke: color-mix(in srgb, var(--wr) 34%, transparent); stroke-dasharray: 3 6; }
+.moon-lead { stroke: color-mix(in srgb, var(--wr) 45%, transparent); }
+.moon-dot { fill: var(--wr); stroke: color-mix(in srgb, var(--bg) 60%, transparent); filter: drop-shadow(0 0 5px var(--wr)); }
+.moon-dot.m-dir { fill: var(--accent-2); }
+.moon-dot.m-file { fill: color-mix(in srgb, var(--text-muted) 90%, transparent); filter: none; }
+.moon-label { fill: color-mix(in srgb, var(--text) 88%, transparent); }
+</style>
+</head>
+<body>
+
+<div class="sky" aria-hidden="true">
+  <div class="cloud c1"></div>
+  <div class="cloud c2"></div>
+  <div class="cloud c3"></div>
+  <div class="stars far" id="stars-far"></div>
+  <div class="stars near" id="stars-near"></div>
+  <div class="streak"></div>
+</div>
+
+<div class="spec-strip">
+  <div>
+    <h1>Map &middot; Cartography A &middot; Relic</h1>
+    <p>A holographic relic on Bridge / Nebula Drift tokens: painted worlds lit from within, connectors strung as threads of light with glyph beads, and an orrery ring of alien script turning once every ten minutes over drifting nebula.</p>
+  </div>
+  <div class="swatches">
+    <span class="swatch"><i style="background:var(--bg)"></i>bg</span>
+    <span class="swatch"><i style="background:var(--surface)"></i>surface</span>
+    <span class="swatch"><i style="background:var(--surface-2)"></i>surface-2</span>
+    <span class="swatch"><i style="background:var(--border)"></i>border</span>
+    <span class="swatch"><i style="background:var(--text)"></i>text</span>
+    <span class="swatch"><i style="background:var(--text-muted)"></i>muted</span>
+    <span class="swatch"><i style="background:var(--accent)"></i>accent</span>
+    <span class="swatch"><i style="background:var(--accent-2)"></i>accent-2</span>
+    <span class="swatch"><i style="background:var(--success)"></i>success</span>
+    <span class="swatch"><i style="background:var(--warning)"></i>warning</span>
+    <span class="swatch"><i style="background:var(--danger)"></i>danger</span>
+    <span class="swatch"><i style="box-shadow:var(--glow)"></i>glow</span>
+  </div>
+  <div class="fonts">ui: <b>Inter</b><br>mono: <b>JetBrains Mono</b><br>display: <b>Orbitron</b></div>
+</div>
+
+<div class="app">
+  <header class="topbar">
+    <span class="logo">ORBITAL</span>
+    <span class="project-name">deck-4 / <b>hull-stress-analysis</b></span>
+    <nav class="mode-dial"><span>Paper</span><span>Night Ops</span><span>Cockpit</span><span class="active">Bridge</span></nav>
+    <span class="kernel-status"><i></i>Python 3.12 &middot; idle</span>
+  </header>
+
+  <nav class="rail">
+    <a class="rail-item active"><svg viewBox="0 0 16 16"><path d="M1.5 3.5 6 2l4 1.5L14.5 2v10.5L10 14l-4-1.5L1.5 14z"/><path d="M6 2v10.5M10 3.5V14"/></svg>Map</a>
+    <a class="rail-item"><svg viewBox="0 0 16 16"><rect x="3" y="1.5" width="10" height="13" rx="1"/><path d="M5.5 5h5M5.5 8h5M5.5 11h3"/></svg>Notebook</a>
+    <a class="rail-item"><svg viewBox="0 0 16 16"><circle cx="6" cy="5.5" r="2.5"/><circle cx="11.5" cy="6.5" r="2"/><path d="M1.5 14c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4M10.5 10.5c2 0 4 1 4 3.5"/></svg>Crew</a>
+    <a class="rail-item"><svg viewBox="0 0 16 16"><path d="M2 3h12v8H7l-3.5 3v-3H2z"/></svg>Comms</a>
+    <a class="rail-item"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.5"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg>Settings</a>
+  </nav>
+
+  <main class="map">
+    <svg class="chart" id="chart" viewBox="0 0 1000 720" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Project map"></svg>
+    <div class="map-hint"><b>Chart &middot; Relay 4</b>click a world to enter &middot; esc returns</div>
+  </main>
+
+  <aside class="plaque" id="plaque"></aside>
+
+  <footer class="statusbar">
+    <span>5 worlds &middot; 8 notebooks &middot; 10 loose files</span>
+    <span>Star date 2026.256 &middot; 14:32</span>
+  </footer>
+</div>
+
+<script>
+(function () {
+'use strict';
+
+/* ===================================================================
+   1. The fixture, embedded. Ages are relative to load time, exactly
+      as app/src/map/fixture.ts computes them from Date.now().
+   =================================================================== */
+var H = 3600e3, D = 86400e3;
+var NOW = Date.now();
+var STAR = { x: 250, y: 470 };
+var CENTRE = { x: 500, y: 360 };
+
+/* Top-level folders become worlds. cx/cy/r are an authored composition,
+   not a ring solve: distance from the star still rises with age, but the
+   arrangement is slanted, and nearer worlds sit larger and lower. */
+var WORLDS = [
+  { id: 'experiments', name: 'experiments', a: 4 * H, items: 74, nb: 17, fl: 54, dirs: 3,
+    cx: 565, cy: 526, r: 95, lead: [0, 95, 0, 110], lab: [0, 126, 'middle'],
+    kids: [['sweeps', 'dir', 3 * H], ['hull-mesh-v4.ipynb', 'nb', 3 * H], ['sweep_runner.py', 'file', 5 * H],
+           ['params.csv', 'file', 2 * D], ['hull-mesh-v3.ipynb', 'nb', 6 * D], ['lift-curve.ipynb', 'nb', 22 * D],
+           ['notes.md', 'file', 210 * D]] },
+  { id: 'checkpoints', name: '.ipynb_checkpoints', a: 20 * H, items: 3, nb: 3, fl: 0, dirs: 0,
+    cx: 535, cy: 231, r: 52, lead: [-52, 0, -74, 0], lab: [-80, -3, 'end'],
+    kids: [['hull-stress-analysis-checkpoint.ipynb', 'nb', 20 * H], ['trajectory-solver-checkpoint.ipynb', 'nb', 26 * H],
+           ['power-budget-checkpoint.ipynb', 'nb', 12 * D]] },
+  { id: 'data', name: 'data', a: 2 * D, items: 16, nb: 1, fl: 14, dirs: 1,
+    cx: 640, cy: 330, r: 72, lead: [51, 51, 76, 69], lab: [82, 65, 'start'],
+    kids: [['raw', 'dir', 2 * D], ['ingest-report.ipynb', 'nb', 2 * D], ['manifest.json', 'file', 2 * D],
+           ['pressures.csv', 'file', 3 * D], ['temps.csv', 'file', 3 * D], ['strain.csv', 'file', 12 * D],
+           ['schema.md', 'file', 35 * D], ['loader.py', 'file', 44 * D], ['legacy-1998.csv', 'file', 260 * D],
+           ['legacy-1999.csv', 'file', 260 * D], ['.gitkeep', 'file', 400 * D]] },
+  { id: 'rigs', name: 'rigs', a: 40 * D, items: 4, nb: 2, fl: 2, dirs: 0,
+    cx: 581, cy: 102, r: 55, lead: [-55, 0, -77, 0], lab: [-83, -3, 'end'],
+    kids: [['vibration-rig.ipynb', 'nb', 40 * D], ['rig_control.py', 'file', 40 * D],
+           ['thermal-rig.ipynb', 'nb', 77 * D], ['wiring.md', 'file', 190 * D]] },
+  { id: 'archive', name: 'archive', a: 500 * D, items: 6, nb: 3, fl: 3, dirs: 0,
+    cx: 812, cy: 186, r: 59, lead: [4, 58, 16, 79], lab: [22, 95, 'middle'],
+    kids: [['apollo-notes.ipynb', 'nb', 500 * D], ['index.md', 'file', 500 * D], ['gemini-notes.ipynb', 'nb', 560 * D],
+           ['mercury-notes.ipynb', 'nb', 620 * D], ['old_sim.py', 'file', 640 * D], ['logbook.txt', 'file', 900 * D]] }
+];
+
+/* Loose notebooks at the root: the star's inner court. */
+var COURT = [
+  { n: 'hull-stress-analysis.ipynb', a: 2 * H, r: 11, x: 218, y: 371, st: 'active', lo: 22 },
+  { n: 'trajectory-solver.ipynb', a: 5 * H, r: 9, x: 146, y: 428, st: 'busy', lo: 22 },
+  { n: 'telemetry-scrub.ipynb', a: 19 * H, r: 8, x: 141, y: 521, st: 'dirty', lo: 22 },
+  { n: 'atmos-entry-model.ipynb', a: 3 * D, r: 7.5, x: 200, y: 594, st: '', lo: 22 },
+  { n: 'power-budget.ipynb', a: 11 * D, r: 7, x: 289, y: 606, st: '', lo: 30 },
+  { n: 'comms-link-margin.ipynb', a: 26 * D, r: 7, x: 376, y: 555, st: '', lo: 22 },
+  { n: 'ion-drive-tuning.ipynb', a: 95 * D, r: 8.5, x: 299, y: 318, st: '', lo: 22, up: 1 },
+  { n: 'first-contact-draft.ipynb', a: 420 * D, r: 7, x: 396, y: 379, st: 'derelict', lo: 22 }
+];
+
+/* Loose files at the root: motes on one ornamental belt. */
+var LOOSE = [
+  ['mission.md', 1 * H, 4.1], ['constants.py', 6 * H, 2.3], ['readings.csv', 9 * H, 880],
+  ['README.md', 4 * D, 1.2], ['requirements.txt', 9 * D, 0.4], ['orbit_utils.py', 17 * D, 18],
+  ['calibration.csv', 60 * D, 2400], ['notes.md', 120 * D, 7.7], ['legacy_sim.py', 300 * D, 33],
+  ['dump.log', 700 * D, 5200]
+];
+var BELT = 'M300 676C470 706 640 700 760 640S930 520 962 452';
+
+/* Ornamental threads. Two kinds, both decoration first:
+   - band: two worlds whose last change falls in the same recency band
+   - wake: a notebook opened right after something inside that world   */
+var THREADS = [
+  { a: 'w:experiments', b: 'w:checkpoints', c: [440, 390], kind: 'band' },
+  { a: 'w:experiments', b: 'n:hull-stress-analysis.ipynb', c: [450, 560], kind: 'wake' },
+  { a: 'w:data', b: 'n:comms-link-margin.ipynb', c: [500, 430], kind: 'wake' },
+  { a: 'w:rigs', b: 'w:archive', c: [720, 55], kind: 'band' },
+  { a: 'w:checkpoints', b: 'n:hull-stress-analysis.ipynb', c: [345, 300], kind: 'wake' }
+];
+
+/* ===================================================================
+   2. Determinism: one seeded RNG, one name hash. Same page every load.
+   =================================================================== */
+var CHARS = ['bands', 'storm', 'ice', 'rings', 'cratered'];
+var CHAR_NAME = ['banded', 'storm-crowned', 'ice-capped', 'ringed', 'cratered'];
+
+function hash(s) { var x = 0; for (var i = 0; i < s.length; i++) x = (x * 5178 + s.charCodeAt(i)) >>> 0; return x; }
+function rngFrom(seed) {
+  var s = seed % 2147483647; if (s <= 0) s += 2147483646;
+  return function () { s = (s * 16807) % 2147483647; return s / 2147483647; };
+}
+function f(n) { return Math.round(n * 100) / 100; }
+function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+function ago(ms) {
+  var m = ms / 60000;
+  if (m < 60) return Math.round(m) + 'm ago';
+  var h = m / 60;
+  if (h < 36) return Math.round(h) + 'h ago';
+  return Math.round(h / 24) + 'd ago';
+}
+
+/* ===================================================================
+   3. Painted worlds. Character comes from the hash of the folder name,
+      so a folder always gets the same face.
+   =================================================================== */
+function worldChar(name) { return hash(name) % 5; }
+
+function bandsArt(R, rnd) {
+  var out = '', y = -R * 0.98, i = 0;
+  while (y < R * 0.98 && i < 14) {
+    var hgt = R * (0.05 + rnd() * 0.13);
+    var rx = R * 1.04;
+    out += '<ellipse class="band b' + (i % 4) + '" cx="0" cy="' + f(y + hgt) + '" rx="' + f(rx) + '" ry="' + f(hgt) + '"/>';
+    y += hgt * 2 + R * 0.015;
+    i++;
+  }
+  return out;
+}
+
+function art(ch, R, rnd) {
+  var tilt = -22 + rnd() * 16;
+  var g = '<g class="w-paint" transform="rotate(' + f(tilt) + ')">';
+  if (ch === 0) {                                   /* bands */
+    g += bandsArt(R, rnd);
+  } else if (ch === 1) {                            /* storm eye */
+    g += bandsArt(R, rnd);
+    var sx = -R * 0.28, sy = R * 0.2;
+    g += '<ellipse class="storm" cx="' + f(sx) + '" cy="' + f(sy) + '" rx="' + f(R * 0.4) + '" ry="' + f(R * 0.24) + '" transform="rotate(-8 ' + f(sx) + ' ' + f(sy) + ')"/>';
+    g += '<ellipse class="storm-eye" cx="' + f(sx) + '" cy="' + f(sy) + '" rx="' + f(R * 0.19) + '" ry="' + f(R * 0.11) + '" transform="rotate(-8 ' + f(sx) + ' ' + f(sy) + ')"/>';
+    g += '<path class="storm-swirl" d="M' + f(sx - R * 0.34) + ' ' + f(sy) + 'a' + f(R * 0.34) + ' ' + f(R * 0.2) + ' 0 1 1 ' + f(R * 0.5) + ' ' + f(R * 0.1) + '"/>';
+  } else if (ch === 2) {                            /* ice caps */
+    g += bandsArt(R, rnd);
+    g += '<ellipse class="cap-ice" cx="0" cy="' + f(-R * 0.92) + '" rx="' + f(R * 0.82) + '" ry="' + f(R * 0.34) + '"/>';
+    g += '<ellipse class="cap-ice" cx="0" cy="' + f(R * 0.95) + '" rx="' + f(R * 0.7) + '" ry="' + f(R * 0.28) + '"/>';
+    g += '<ellipse class="maria" cx="' + f(R * 0.1) + '" cy="0" rx="' + f(R * 1.04) + '" ry="' + f(R * 0.1) + '"/>';
+  } else if (ch === 3) {                            /* ringed */
+    g += bandsArt(R, rnd);
+    g += '<ellipse class="maria" cx="' + f(-R * 0.2) + '" cy="' + f(-R * 0.3) + '" rx="' + f(R * 0.42) + '" ry="' + f(R * 0.16) + '"/>';
+  } else {                                          /* cratered moon-world */
+    g += '<ellipse class="maria" cx="' + f(-R * 0.22) + '" cy="' + f(R * 0.3) + '" rx="' + f(R * 0.62) + '" ry="' + f(R * 0.44) + '"/>';
+    g += '<ellipse class="maria" cx="' + f(R * 0.42) + '" cy="' + f(-R * 0.34) + '" rx="' + f(R * 0.36) + '" ry="' + f(R * 0.26) + '"/>';
+    for (var i = 0; i < 9; i++) {
+      var ang = rnd() * Math.PI * 2, rad = Math.sqrt(rnd()) * R * 0.82;
+      var cr = R * (0.07 + rnd() * 0.12);
+      var cx = Math.cos(ang) * rad, cy = Math.sin(ang) * rad;
+      g += '<g class="crater" transform="translate(' + f(cx) + ' ' + f(cy) + ')">' +
+           '<circle class="crater-o" r="' + f(cr) + '"/>' +
+           '<circle class="crater-i" cx="' + f(-cr * 0.22) + '" cy="' + f(-cr * 0.22) + '" r="' + f(cr * 0.66) + '"/></g>';
+    }
+  }
+  g += '</g>';
+  return g;
+}
+
+/* The lit side is upper-left, so the shadow crescent bulges to 45deg. */
+function crescent(R) {
+  var s = Math.PI / 4, k = 0.42;
+  var p1 = [Math.cos(s - Math.PI / 2) * R, Math.sin(s - Math.PI / 2) * R];
+  var p2 = [Math.cos(s + Math.PI / 2) * R, Math.sin(s + Math.PI / 2) * R];
+  var c = [Math.cos(s) * R * k * 2, Math.sin(s) * R * k * 2];
+  return 'M' + f(p1[0]) + ' ' + f(p1[1]) + 'A' + f(R) + ' ' + f(R) + ' 0 0 1 ' + f(p2[0]) + ' ' + f(p2[1]) +
+         'Q' + f(c[0]) + ' ' + f(c[1]) + ' ' + f(p1[0]) + ' ' + f(p1[1]) + 'Z';
+}
+
+function moonsOf(w, R) {
+  var kids = w.kids.slice(0, 8), extra = w.items - kids.length;
+  var orb = R + 54, out = '<g class="moons">';
+  out += '<circle class="moon-orbit" r="' + f(orb) + '"/>';
+  for (var i = 0; i < kids.length; i++) {
+    var ang = (-100 + (360 / Math.max(kids.length, 5)) * i) * Math.PI / 180;
+    var cx = Math.cos(ang) * orb, cy = Math.sin(ang) * orb;
+    var k = kids[i][1];
+    var mr = k === 'dir' ? 6 : k === 'nb' ? 5 : 3.4;
+    var right = Math.cos(ang) >= -0.05;
+    var lx = Math.cos(ang) * (orb + 11), ly = Math.sin(ang) * (orb + 11);
+    out += '<line class="moon-lead" x1="' + f(Math.cos(ang) * (orb + mr + 1)) + '" y1="' + f(Math.sin(ang) * (orb + mr + 1)) +
+           '" x2="' + f(lx) + '" y2="' + f(ly) + '"/>';
+    out += '<circle class="moon-dot m-' + k + '" cx="' + f(cx) + '" cy="' + f(cy) + '" r="' + mr + '"/>';
+    out += '<text class="moon-label" x="' + f(lx + (right ? 4 : -4)) + '" y="' + f(ly) + '" text-anchor="' + (right ? 'start' : 'end') +
+           '" dominant-baseline="middle">' + esc(kids[i][0]) + '</text>';
+  }
+  if (extra > 0) {
+    out += '<text class="moon-label" x="0" y="' + f(orb + 26) + '" text-anchor="middle">+' + extra + ' more</text>';
+  }
+  out += '</g>';
+  return out;
+}
+
+function worldMarkup(w) {
+  var ch = worldChar(w.name), rnd = rngFrom(hash(w.name)), R = w.r;
+  var cid = 'clip-' + w.id;
+  var s = '<g class="world w-c' + ch + '" data-id="' + w.id + '" style="--ox:' + w.cx + 'px;--oy:' + w.cy + 'px;--fx:' +
+          f(CENTRE.x - w.cx) + 'px;--fy:' + f(CENTRE.y - w.cy) + 'px">';
+  s += '<g transform="translate(' + w.cx + ' ' + w.cy + ')">';
+  if (ch === 3) {
+    s += '<g class="w-rings" transform="rotate(-19)">' +
+         '<ellipse class="w-ring" rx="' + f(R * 1.78) + '" ry="' + f(R * 0.46) + '"/>' +
+         '<ellipse class="w-ring" rx="' + f(R * 1.48) + '" ry="' + f(R * 0.38) + '"/></g>';
+  }
+  s += '<circle class="w-atmo" r="' + f(R * 1.3) + '"/>';
+  s += '<g clip-path="url(#' + cid + ')">';
+  s += '<circle class="w-base" r="' + f(R) + '"/>';
+  s += art(ch, R, rnd);
+  s += '<circle class="w-term" r="' + f(R) + '"/>';
+  s += '<path class="w-term-c" d="' + crescent(R) + '"/>';
+  s += '</g>';
+  s += '<circle class="w-rim" r="' + f(R) + '"/>';
+  if (ch === 3) {
+    var a = R * 1.78, b = R * 0.46;
+    s += '<g class="w-rings" transform="rotate(-19)"><path class="w-ringfront" d="M' + f(-a) + ' 0A' + f(a) + ' ' + f(b) +
+         ' 0 0 0 ' + f(a) + ' 0"/></g>';
+  }
+  s += moonsOf(w, R);
+  s += '<g class="w-label">';
+  s += '<path class="w-lead" d="M' + w.lead[0] + ' ' + w.lead[1] + 'L' + w.lead[2] + ' ' + w.lead[3] + '"/>';
+  s += '<rect class="w-sq" x="' + f(w.lead[2] - 2.6) + '" y="' + f(w.lead[3] - 2.6) + '" width="5.2" height="5.2"/>';
+  s += '<text class="w-name" x="' + w.lab[0] + '" y="' + w.lab[1] + '" text-anchor="' + w.lab[2] + '">' + esc(w.name) + '</text>';
+  s += '<text class="w-cap" x="' + w.lab[0] + '" y="' + (w.lab[1] + 17) + '" text-anchor="' + w.lab[2] + '">' +
+       w.items + ' items · changed ' + ago(w.a) + '</text>';
+  s += '</g></g></g>';
+  return s;
+}
+
+/* ===================================================================
+   4. The orrery ring: alien script, stroke-built, seeded.
+   =================================================================== */
+function runeGlyph(rnd) {
+  var d = '', n = 2 + Math.floor(rnd() * 3);
+  var top = -5 - rnd() * 2, bot = 4 + rnd() * 2;
+  d += 'M0 ' + f(top) + 'V' + f(bot);
+  for (var i = 0; i < n; i++) {
+    var y = top + (bot - top) * (0.14 + rnd() * 0.72);
+    var w = 2 + rnd() * 3, sg = rnd() < 0.5 ? -1 : 1, k = rnd();
+    if (k < 0.44) d += 'M0 ' + f(y) + 'h' + f(w * sg);
+    else if (k < 0.74) d += 'M0 ' + f(y) + 'l' + f(w * sg) + ' ' + f(-w * 0.8);
+    else d += 'M' + f(w * sg) + ' ' + f(y) + 'v' + f(2 + rnd() * 2);
+  }
+  if (rnd() < 0.34) d += 'M-2.4 ' + f(top) + 'h4.8';
+  return d;
+}
+
+function orrery() {
+  var rnd = rngFrom(20260914), R = 210, N = 58;
+  var s = '<g class="orrery" style="transform-box:view-box;transform-origin:' + STAR.x + 'px ' + STAR.y + 'px">';
+  s += '<circle class="orrery-ring" cx="' + STAR.x + '" cy="' + STAR.y + '" r="198"/>';
+  s += '<circle class="orrery-ring" cx="' + STAR.x + '" cy="' + STAR.y + '" r="222"/>';
+  for (var i = 0; i < N; i++) {
+    var ang = (i / N) * Math.PI * 2;
+    var x = STAR.x + Math.cos(ang) * R, y = STAR.y + Math.sin(ang) * R;
+    var deg = ang * 180 / Math.PI + 90;
+    s += '<path class="rune" transform="translate(' + f(x) + ' ' + f(y) + ') rotate(' + f(deg) + ')" d="' + runeGlyph(rnd) + '"/>';
+    if (i % 4 === 0) {
+      s += '<line class="orrery-tick" x1="' + f(STAR.x + Math.cos(ang) * 224) + '" y1="' + f(STAR.y + Math.sin(ang) * 224) +
+           '" x2="' + f(STAR.x + Math.cos(ang) * 233) + '" y2="' + f(STAR.y + Math.sin(ang) * 233) + '"/>';
+    }
+  }
+  s += '</g>';
+  return s;
+}
+
+/* ===================================================================
+   5. Star sigil, court, belt, threads, background arcs.
+   =================================================================== */
+function starSigil() {
+  var s = '<g class="star">';
+  s += '<circle class="star-ring" cx="' + STAR.x + '" cy="' + STAR.y + '" r="18"/>';
+  s += '<circle class="star-ring dashed" cx="' + STAR.x + '" cy="' + STAR.y + '" r="31"/>';
+  s += '<circle class="star-ring" cx="' + STAR.x + '" cy="' + STAR.y + '" r="45"/>';
+  for (var i = 0; i < 24; i++) {
+    var a = (i / 24) * Math.PI * 2;
+    if (Math.sin(a) > 0.5) continue;   /* the sigil opens downward, for its name */
+    var lng = (i % 6 === 1) && Math.sin(a) < 0.1;
+    var r1 = 48, r2 = lng ? 78 : 58;
+    s += '<line class="star-ray' + (lng ? ' long' : '') + '" x1="' + f(STAR.x + Math.cos(a) * r1) + '" y1="' + f(STAR.y + Math.sin(a) * r1) +
+         '" x2="' + f(STAR.x + Math.cos(a) * r2) + '" y2="' + f(STAR.y + Math.sin(a) * r2) + '"/>';
+  }
+  s += '<path class="star-glyph" transform="translate(' + STAR.x + ' ' + STAR.y + ')" d="M0 -12L10 -6V6L0 12L-10 6V-6ZM0 -6L0 3M-5 -1.5L0 3L5 -1.5"/>';
+  s += '<circle class="star-core" cx="' + STAR.x + '" cy="' + STAR.y + '" r="3.4"/>';
+  s += '<text class="star-name" x="' + STAR.x + '" y="504">hull-stress-analysis</text>';
+  s += '<text class="star-sub" x="' + STAR.x + '" y="519">ROOT · 23 BODIES</text>';
+  s += '</g>';
+  return s;
+}
+
+function court() {
+  var s = '<g class="court">';
+  for (var i = 0; i < COURT.length; i++) {
+    var b = COURT[i], label = b.n.replace(/\.ipynb$/, '');
+    s += '<g class="nb ' + (b.st ? 'is-' + b.st : '') + '">';
+    if (b.st === 'active' || b.st === 'busy' || b.st === 'dirty') {
+      s += '<circle class="nb-halo" cx="' + b.x + '" cy="' + b.y + '" r="' + f(b.r + 5) + '"/>';
+    }
+    if (b.st === 'active') s += '<circle class="nb-halo second" cx="' + b.x + '" cy="' + b.y + '" r="' + f(b.r + 9.5) + '"/>';
+    s += '<circle class="nb-body" cx="' + b.x + '" cy="' + b.y + '" r="' + b.r + '"/>';
+    var sg = b.up ? -1 : 1;
+    s += '<path class="nb-lead" d="M' + b.x + ' ' + f(b.y + sg * (b.r + 2)) + 'V' + f(b.y + sg * (b.lo - 9)) + '"/>';
+    s += '<rect class="nb-term" x="' + f(b.x - 2.2) + '" y="' + f(b.y + sg * (b.lo - 11) - 2.2) + '" width="4.4" height="4.4"/>';
+    s += '<text class="nb-label" x="' + b.x + '" y="' + f(b.up ? b.y - b.lo - b.r + 9 : b.y + b.lo + b.r) + '">' + esc(label) + '</text>';
+    s += '</g>';
+  }
+  s += '</g>';
+  return s;
+}
+
+function belt() {
+  var s = '<g class="belt"><path id="beltpath" class="belt-path" d="' + BELT + '"/>';
+  s += '<text class="belt-cap"><textPath href="#beltpath" startOffset="60%">drift belt · 10 loose files</textPath></text>';
+  s += '<g id="motes"></g></g>';
+  return s;
+}
+
+function bgArt() {
+  var s = '<g class="bg-art">';
+  var arcs = [[320, -62, 30, 'today'], [430, -47, 26, 'this week']];
+  for (var i = 0; i < arcs.length; i++) {
+    var R = arcs[i][0], a0 = arcs[i][1] * Math.PI / 180, a1 = arcs[i][2] * Math.PI / 180;
+    var p0 = [STAR.x + Math.cos(a0) * R, STAR.y + Math.sin(a0) * R];
+    var p1 = [STAR.x + Math.cos(a1) * R, STAR.y + Math.sin(a1) * R];
+    s += '<path id="bandarc' + i + '" class="band-arc" d="M' + f(p0[0]) + ' ' + f(p0[1]) + 'A' + R + ' ' + R + ' 0 0 1 ' + f(p1[0]) + ' ' + f(p1[1]) + '"/>';
+    s += '<text class="band-cap"><textPath href="#bandarc' + i + '" startOffset="3%">' + arcs[i][3] + '</textPath></text>';
+  }
+  /* A meridian sweeping the empty quarter: ornament, echoing the orrery. */
+  var MR = 252, m0 = 200 * Math.PI / 180, m1 = 280 * Math.PI / 180;
+  s += '<path class="band-arc meridian" d="M' + f(STAR.x + Math.cos(m0) * MR) + ' ' + f(STAR.y + Math.sin(m0) * MR) +
+       'A' + MR + ' ' + MR + ' 0 0 1 ' + f(STAR.x + Math.cos(m1) * MR) + ' ' + f(STAR.y + Math.sin(m1) * MR) + '"/>';
+  for (var t = 0; t <= 8; t++) {
+    var ma = m0 + (m1 - m0) * (t / 8), inw = t % 2 ? 9 : 16;
+    s += '<line class="orrery-tick" x1="' + f(STAR.x + Math.cos(ma) * MR) + '" y1="' + f(STAR.y + Math.sin(ma) * MR) +
+         '" x2="' + f(STAR.x + Math.cos(ma) * (MR - inw)) + '" y2="' + f(STAR.y + Math.sin(ma) * (MR - inw)) + '"/>';
+    if (t === 2 || t === 6) {
+      s += '<path class="dir-tick" transform="translate(' + f(STAR.x + Math.cos(ma) * (MR - 26)) + ' ' +
+           f(STAR.y + Math.sin(ma) * (MR - 26)) + ') rotate(' + f(ma * 180 / Math.PI + 90) + ')" d="M-4 2.6L0 -2.6L4 2.6"/>';
+    }
+  }
+  s += '</g>';
+  return s;
+}
+
+function anchorOf(ref) {
+  if (ref.indexOf('w:') === 0) {
+    for (var i = 0; i < WORLDS.length; i++) if (WORLDS[i].id === ref.slice(2)) return { x: WORLDS[i].cx, y: WORLDS[i].cy, r: WORLDS[i].r + 9 };
+  }
+  for (var j = 0; j < COURT.length; j++) if (COURT[j].n === ref.slice(2)) return { x: COURT[j].x, y: COURT[j].y, r: COURT[j].r + 7 };
+  return { x: 0, y: 0, r: 0 };
+}
+
+function threads() {
+  var s = '<g class="threads">';
+  for (var i = 0; i < THREADS.length; i++) {
+    var t = THREADS[i], A = anchorOf(t.a), B = anchorOf(t.b), C = t.c;
+    var a1 = Math.atan2(C[1] - A.y, C[0] - A.x), a2 = Math.atan2(C[1] - B.y, C[0] - B.x);
+    var p0 = [A.x + Math.cos(a1) * A.r, A.y + Math.sin(a1) * A.r];
+    var p1 = [B.x + Math.cos(a2) * B.r, B.y + Math.sin(a2) * B.r];
+    var d = 'M' + f(p0[0]) + ' ' + f(p0[1]) + 'Q' + C[0] + ' ' + C[1] + ' ' + f(p1[0]) + ' ' + f(p1[1]);
+    s += '<path class="thread-core t-' + t.kind + '" id="thread' + i + '" d="' + d + '"/>';
+    s += '<path class="thread-flow t-' + t.kind + '" d="' + d + '"/>';
+  }
+  s += '<g id="beads"></g></g>';
+  return s;
+}
+
+/* ===================================================================
+   6. Assemble.
+   =================================================================== */
+var defs = '<defs>';
+for (var i = 0; i < WORLDS.length; i++) {
+  defs += '<clipPath id="clip-' + WORLDS[i].id + '"><circle r="' + WORLDS[i].r + '"/></clipPath>';
+}
+for (var g = 0; g < 5; g++) {
+  defs += '<radialGradient id="gs' + g + '" cx="0.32" cy="0.26" r="0.92">' +
+          '<stop class="s' + g + 'a" offset="0"/><stop class="s' + g + 'b" offset="0.55"/><stop class="s' + g + 'c" offset="1"/></radialGradient>';
+}
+defs += '<radialGradient id="gterm" cx="0.3" cy="0.25" r="1.05"><stop class="term-a" offset="0.3"/><stop class="term-b" offset="1"/></radialGradient>';
+defs += '<radialGradient id="gatmo" cx="0.5" cy="0.5" r="0.5"><stop class="atmo-a" offset="0.66"/><stop class="atmo-b" offset="0.79"/><stop class="atmo-c" offset="1"/></radialGradient>';
+defs += '<pattern id="hatchA" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line class="hatch" x1="0" y1="0" x2="0" y2="7"/></pattern>';
+defs += '<pattern id="hatchB" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line class="hatch" x1="0" y1="0" x2="0" y2="4"/></pattern>';
+defs += '<pattern id="hatchC" width="3" height="3" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)"><line class="hatch" x1="0" y1="0" x2="0" y2="3"/></pattern>';
+defs += '<pattern id="cross" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(30)"><line class="hatch" x1="0" y1="0" x2="0" y2="5"/><line class="hatch" x1="0" y1="0" x2="5" y2="0"/></pattern>';
+defs += '<pattern id="stipple" width="5" height="5" patternUnits="userSpaceOnUse"><circle class="dot" cx="1.4" cy="1.4" r="0.55"/><circle class="dot" cx="3.9" cy="3.6" r="0.4"/></pattern>';
+defs += '<pattern id="stippleD" width="3.2" height="3.2" patternUnits="userSpaceOnUse"><circle class="dot" cx="1" cy="1" r="0.6"/><circle class="dot" cx="2.5" cy="2.4" r="0.5"/></pattern>';
+defs += '</defs>';
+
+var svg = document.getElementById('chart');
+var markup = defs + bgArt() + orrery() + threads() + belt() + starSigil() + court();
+markup += '<g class="worlds">';
+for (var w = 0; w < WORLDS.length; w++) markup += worldMarkup(WORLDS[w]);
+markup += '</g>';
+svg.innerHTML = markup;
+
+/* Beads and direction ticks ride the threads, sampled off the real path. */
+(function () {
+  var host = document.getElementById('beads');
+  var out = '';
+  for (var i = 0; i < THREADS.length; i++) {
+    var p = document.getElementById('thread' + i);
+    if (!p || !p.getTotalLength) continue;
+    var L = p.getTotalLength();
+    var spots = [0.17, 0.36, 0.79];
+    for (var k = 0; k < spots.length; k++) {
+      var pt = p.getPointAtLength(L * spots[k]), pt2 = p.getPointAtLength(Math.min(L, L * spots[k] + 1));
+      var deg = Math.atan2(pt2.y - pt.y, pt2.x - pt.x) * 180 / Math.PI;
+      out += '<g class="bead-g t-' + THREADS[i].kind + '" transform="translate(' + f(pt.x) + ' ' + f(pt.y) + ') rotate(' + f(deg) + ')">' +
+             '<path class="bead" d="M0 -4.4L3.4 0L0 4.4L-3.4 0Z"/>' +
+             '<path class="bead" d="M-6 -2.6V2.6M6 -2.6V2.6"/>' +
+             '<circle class="bead-dot" r="1.25"/></g>';
+    }
+    var tp = p.getPointAtLength(L * 0.58), tp2 = p.getPointAtLength(Math.min(L, L * 0.58 + 1));
+    var tdeg = Math.atan2(tp2.y - tp.y, tp2.x - tp.x) * 180 / Math.PI;
+    out += '<g class="tick-g t-' + THREADS[i].kind + '" transform="translate(' + f(tp.x) + ' ' + f(tp.y) + ') rotate(' + f(tdeg) + ')">' +
+           '<path class="dir-tick" d="M-3.6 -4.6L3 0L-3.6 4.6"/></g>';
+  }
+  host.innerHTML = out;
+})();
+
+/* Motes on the belt, most recent nearest the star. */
+(function () {
+  var p = document.getElementById('beltpath'), host = document.getElementById('motes');
+  if (!p || !p.getTotalLength) return;
+  var L = p.getTotalLength(), out = '';
+  for (var i = 0; i < LOOSE.length; i++) {
+    var t = 0.045 + (i / (LOOSE.length - 1)) * 0.9;
+    var pt = p.getPointAtLength(L * t);
+    var kb = LOOSE[i][2];
+    var r = 2.6 + Math.min(4.2, Math.log(kb + 1) / Math.LN10 * 1.25);
+    var off = (i % 2 ? -1 : 1) * (3 + (i % 3) * 3);
+    out += '<circle class="mote' + (LOOSE[i][1] > 200 * D ? ' derelict' : '') + '" cx="' + f(pt.x) + '" cy="' + f(pt.y + off) + '" r="' + f(r) + '"/>';
+    out += '<line class="belt-tick" x1="' + f(pt.x) + '" y1="' + f(pt.y - 6) + '" x2="' + f(pt.x) + '" y2="' + f(pt.y - 11) + '"/>';
+  }
+  host.innerHTML = out;
+})();
+
+/* ===================================================================
+   7. Plaque + interaction.
+   =================================================================== */
+var plaque = document.getElementById('plaque');
+var GLY = { dir: '◈', nb: '●', file: '·' };
+var focused = null;
+
+function rows(list) {
+  var s = '<ul class="plaque-recent">';
+  for (var i = 0; i < list.length; i++) {
+    s += '<li><span class="g g-' + list[i][1] + '">' + GLY[list[i][1]] + '</span><span class="n">' + esc(list[i][0]) +
+         '</span><span class="t">' + ago(list[i][2]) + '</span></li>';
+  }
+  return s + '</ul>';
+}
+
+function renderWorld(w) {
+  var ch = worldChar(w.name);
+  var recent = w.kids.slice().sort(function (a, b) { return a[2] - b[2]; }).slice(0, 3);
+  plaque.innerHTML =
+    '<div class="plaque-kind">World · ' + CHAR_NAME[ch] + '</div>' +
+    '<h2 class="plaque-name">' + esc(w.name) + '</h2>' +
+    '<div class="plaque-sub">' + w.items + ' items · changed ' + ago(w.a) + '</div>' +
+    '<div class="plaque-rule"></div>' +
+    '<dl class="plaque-stats">' +
+      '<dt>notebooks</dt><dd>' + w.nb + '</dd>' +
+      '<dt>files</dt><dd>' + w.fl + '</dd>' +
+      '<dt>folders</dt><dd>' + w.dirs + '</dd>' +
+      '<dt>last change</dt><dd>' + ago(w.a) + '</dd>' +
+    '</dl>' +
+    '<h3 class="plaque-h">most recent inside</h3>' +
+    rows(recent) +
+    '<div class="plaque-actions"><button class="pbtn primary" type="button">Enter</button>' +
+    '<button class="pbtn" type="button">Reveal in files</button></div>' +
+    '<div class="plaque-foot">' + (focused && focused.id === w.id ? 'entered · esc returns' : 'click the world to enter') + '</div>';
+}
+
+function renderSummary() {
+  var recent = [['mission.md', 'file', 1 * H], ['hull-stress-analysis.ipynb', 'nb', 2 * H], ['experiments', 'dir', 4 * H]];
+  plaque.innerHTML =
+    '<div class="plaque-kind">System · chart</div>' +
+    '<h2 class="plaque-name">hull-stress-analysis</h2>' +
+    '<div class="plaque-sub">workspace root · changed ' + ago(1 * H) + '</div>' +
+    '<div class="plaque-rule"></div>' +
+    '<dl class="plaque-stats">' +
+      '<dt>worlds</dt><dd>5</dd>' +
+      '<dt>notebooks</dt><dd>8</dd>' +
+      '<dt>loose files</dt><dd>10</dd>' +
+      '<dt>total bodies</dt><dd>126</dd>' +
+    '</dl>' +
+    '<h3 class="plaque-h">most recent</h3>' +
+    rows(recent) +
+    '<div class="plaque-actions"><button class="pbtn primary" type="button">Enter</button>' +
+    '<button class="pbtn" type="button">Reveal in files</button></div>' +
+    '<div class="plaque-foot">hover a world to read its plaque</div>';
+}
+
+function worldById(id) { for (var i = 0; i < WORLDS.length; i++) if (WORLDS[i].id === id) return WORLDS[i]; return null; }
+
+function setFocus(w) {
+  focused = w;
+  var groups = svg.querySelectorAll('.world');
+  for (var i = 0; i < groups.length; i++) {
+    groups[i].classList.toggle('is-focused', !!w && groups[i].getAttribute('data-id') === w.id);
+  }
+  svg.classList.toggle('has-focus', !!w);
+  if (w) renderWorld(w); else renderSummary();
+}
+
+var nodes = svg.querySelectorAll('.world');
+for (var n = 0; n < nodes.length; n++) {
+  (function (el) {
+    var w = worldById(el.getAttribute('data-id'));
+    el.addEventListener('mouseenter', function () { el.classList.add('is-hover'); renderWorld(w); });
+    el.addEventListener('mouseleave', function () { el.classList.remove('is-hover'); if (focused) renderWorld(focused); else renderSummary(); });
+    el.addEventListener('click', function (ev) { ev.stopPropagation(); setFocus(focused && focused.id === w.id ? null : w); });
+  })(nodes[n]);
+}
+svg.addEventListener('click', function () { if (focused) setFocus(null); });
+document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && focused) setFocus(null); });
+
+renderSummary();
+
+/* ===================================================================
+   8. Sky: one seeded field, drawn as a box-shadow list.
+   =================================================================== */
+(function () {
+  var seed = 7;
+  var tone = getComputedStyle(document.documentElement).getPropertyValue('--star-rgb').trim();
+  function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+  function field(count, w, h, maxSize) {
+    var out = [];
+    for (var i = 0; i < count; i++) {
+      out.push(Math.round(rnd() * w) + 'px ' + Math.round(rnd() * h) + 'px 0 ' + (rnd() * maxSize).toFixed(1) +
+               'px rgba(' + tone + ', ' + (0.35 + rnd() * 0.65).toFixed(2) + ')');
+    }
+    return out.join(',');
+  }
+  var w = Math.max(window.innerWidth, 1600) * 1.2, h = Math.max(window.innerHeight, 1000) * 1.2;
+  document.getElementById('stars-far').style.boxShadow = field(230, w, h, 0.6);
+  document.getElementById('stars-near').style.boxShadow = field(74, w, h, 1.1);
+})();
+
+if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  document.documentElement.setAttribute('data-motion', 'reduced');
+}
+})();
+</script>
+
+</body>
+</html>

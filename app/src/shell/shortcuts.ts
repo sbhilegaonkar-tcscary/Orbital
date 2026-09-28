@@ -10,7 +10,7 @@
  */
 import { useSyncExternalStore } from 'react';
 
-export type ShortcutContext = 'edit' | 'command' | 'global';
+export type ShortcutContext = 'edit' | 'command' | 'global' | 'map';
 
 export interface ShortcutEntry {
   keys: string;
@@ -49,6 +49,27 @@ export const SHORTCUTS: ShortcutEntry[] = [
   { keys: 'Shift+O', action: 'Toggle output collapse for all cells', context: 'command' },
   { keys: 'L', action: 'Toggle line numbers in this cell', context: 'command' },
   { keys: '? or H', action: 'Keyboard help overlay', context: 'command' },
+
+  // Map view (docs/KEYBOARD.md "Map view") — active when the map has focus
+  // and no text input does
+  { keys: 'Tab / Shift+Tab', action: 'Next / previous body (inner ring outwards)', context: 'map' },
+  { keys: 'Enter or Space', action: 'Open the selection, or enter the folder', context: 'map' },
+  { keys: 'Esc', action: 'Deselect; if nothing is selected, go up one level', context: 'map' },
+  { keys: 'Backspace', action: 'Go up one level', context: 'map' },
+  { keys: '/', action: 'Focus the filter (Esc there clears it and returns to the map)', context: 'map' },
+  { keys: 'O', action: 'Toggle Chart / Orbit (chart style only)', context: 'map' },
+  { keys: 'H', action: 'Toggle hidden files', context: 'map' },
+  { keys: '?', action: 'Keyboard help overlay', context: 'map' },
+  // The camera (docs/KEYBOARD.md "Map view", the second table)
+  { keys: 'Drag / wheel', action: 'Pan the plate / zoom about the cursor', context: 'map' },
+  { keys: 'Double-click empty stage', action: 'Fit the whole plate in view', context: 'map' },
+  { keys: 'F', action: 'Fit to view', context: 'map' },
+  { keys: '+ / -', action: 'Zoom in / out about the middle of the stage', context: 'map' },
+  { keys: '0', action: 'Reset the camera to where the system opened', context: 'map' },
+  { keys: '← ↑ → ↓', action: 'Pan by 48px, when the stage has focus', context: 'map' },
+  { keys: '↑ / ↓', action: 'Explorer: move between rows', context: 'map' },
+  { keys: 'Enter', action: 'Explorer: open the row, or enter its folder', context: 'map' },
+  { keys: 'Esc', action: 'Explorer: return focus to the map', context: 'map' },
 
   // Global — notebook-related subset (Ctrl+B / Ctrl+` / Ctrl+Shift+I belong
   // to the layout, owned elsewhere)

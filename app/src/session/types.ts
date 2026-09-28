@@ -111,6 +111,8 @@ export interface ContentsEntry {
   path: string;
   type: 'notebook' | 'directory' | 'file';
   lastModified: string;
+  /** Bytes on disk. Undefined for directories, and whenever the server omits it. */
+  size?: number;
 }
 
 export interface ContentsApi {
